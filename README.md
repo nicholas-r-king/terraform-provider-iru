@@ -1,6 +1,8 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+
 # Terraform provider for Iru — development milestone
 
-Local, unpublished provider foundation using the HashiCorp Terraform Plugin
+Development provider foundation using the HashiCorp Terraform Plugin
 Framework v1.19.0. The first resource is `iru_custom_script`.
 
 This is a review milestone, not production-ready software. It has not contacted
@@ -59,7 +61,7 @@ verified local Terraform executable before running the tests. It uses a test-onl
 provider binary, synthetic credentials, a temporary state directory, and an IPv4
 loopback mock. The production binary has no mock flags or environment bypass.
 The test needs local provider RPC sockets; a restricted sandbox may deny them.
-Current NK-Main results used `go test -vet=off` because application control blocks
+The Windows validation run used `go test -vet=off` because application control blocks
 the official Go vet executable. This does not count as a passing vet check.
 
 For a local CLI evaluation after these checks pass, configure a Terraform CLI
@@ -118,5 +120,7 @@ when possible.
 [API contract and provenance](docs/api-contract.md) identifies the official API
 collection, vendor CLI reference, and community options reviewed. Implementation
 and test fixtures were written for this repository; no vendor/community source
-was copied or vendored. No project license has been selected. Dependency licenses
-apply to those dependencies and must be reviewed before distribution.
+was copied or vendored. Original project source is licensed under
+[MPL-2.0](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) identify the
+separately licensed dependencies; their licenses continue to apply. This is an
+unofficial community provider, with no vendor endorsement implied.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package client implements only the documented Iru Custom Scripts API.
 // It deliberately does not log headers, URLs, request/response bodies, or tokens.
 package client

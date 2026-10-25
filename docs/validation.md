@@ -1,6 +1,8 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+
 # Milestone validation status
 
-Validated on NK-MAIN on 2026-10-25, branch `feat/provider-foundation`.
+Validated on Windows on 2026-10-25, branch `feat/provider-foundation`.
 
 ## Result
 
@@ -45,7 +47,7 @@ v0.31.0; Go 1.27.3 was the actual validation compiler.
 
 Relative to the checkout, tools are in `../.tools/`, the production build is
 `../.tools/artifacts/terraform-provider-iru.exe`, and support evidence is in
-`../.cache/go-test-review.jsonl` and `../.cache/production-cli-check/schema.json`.
+`../.cache/go-test-license.jsonl` and `../.cache/production-cli-check/schema.json`.
 Tool archives, caches, binaries, temporary mock state, and debug logs are not
 staged as source deliverables.
 
@@ -98,26 +100,32 @@ schema inspected with Terraform.
   fixed. A P3 documentation clarification explains imported static-default
   changes. See [review.md](review.md). The 48-test run and build were repeated
   after fixes; vet was not retried or bypassed during this review.
+- The approved MPL-2.0 license and SPDX source notices were added without Go
+  behavior changes. The build, 48-test suite, and local CLI/example checks were
+  repeated successfully; vet remained blocked and was not retried.
 
 ## Repository and publication status
 
-No ancestor/workspace AGENTS.md or local `.agents` instructions were present.
-The private remote was verified empty before implementation. Git CLI had no
-cached credential, so HTTPS clone failed without an interactive login; a fresh
-local repository was initialized and linked to that empty remote. Browser login
-does not automatically authenticate Git Credential Manager.
+The implementation was developed from an empty repository using public API and
+framework references. It is proposed on `feat/provider-foundation` in draft PR
+\#1; the main branch retains only a minimal baseline and its license. No provider
+implementation has been merged, and no release or Registry publication exists.
 
-All implementation files are local on `feat/provider-foundation`. No commit,
-push, PR, release, merge, Actions workflow, branch protection, credential change,
-or sharing change was made. No project license was selected.
+The owner selected MPL-2.0 for the original source. A read-only audit of both
+published branches, their two original commits, the 18-file milestone, and PR
+metadata found no credentials, actual tenant/customer data, personal filesystem
+paths, or confidential source. Literal tokens, UUIDs, and tenant-like hostnames
+in tests are synthetic. Nonsecret local machine/setup references were removed
+from current documentation; earlier commits retain those nonsecret references.
+No sensitive history requiring a rewrite was identified.
 
 ## Remaining requirements
 
 1. An administrator-approved resolution of the OS block is needed to complete
    vet. Do not weaken security policy just to run this milestone.
-2. Review the source, documented legacy-response limits, and license choice
-   before authorizing publication. Git authentication will require a supported
-   secure login if a later push is requested; never paste a token into chat.
+2. Review source and documented legacy-response limits before use. Before any
+   binary release, package dependency license/copyright/NOTICE material and MPL
+   source-availability information as described in THIRD_PARTY_NOTICES.md.
 3. A later explicitly authorized nonproduction tenant check is still needed for
    actual API permissions, normalization, Self Service transitions, remediation
    clearing, propagation, and tenant-level import/no-op behavior. Passing mocks

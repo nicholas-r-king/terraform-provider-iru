@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+
 # Independent milestone review
 
 Completed on 2026-10-25 by a fresh, read-only reviewer in this environment.

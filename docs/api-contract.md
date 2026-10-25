@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+
 # API contract and provenance
 
 Checked on 2026-10-25. All requests made during research fetched public
@@ -78,9 +80,12 @@ production readiness. License statements come from their repository pages.
 
 ## License provenance
 
-No project LICENSE file or release license was selected. No external source was
-copied into this repository. The pinned HashiCorp Framework and Plugin Go
+Original project source is licensed under [MPL-2.0](../LICENSE), selected by the
+repository owner. The implementation and synthetic fixtures were written for
+this repository with AI-assisted development, using the public references above.
+No vendor or community-provider source files were copied or vendored. The pinned HashiCorp Framework and Plugin Go
 dependencies carry MPL-2.0 source notices; Go's standard library is distributed
 under its own BSD-style terms. Transitive modules are recorded in `go.mod` and
 `go.sum` and must retain their own licenses if later distributed or vendored.
-This note does not license the original code in this repository.
+See [third-party notices](../THIRD_PARTY_NOTICES.md) for the audited dependency
+inventory and notice requirements for any future binary distribution.

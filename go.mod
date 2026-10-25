@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 module github.com/nicholas-r-king/terraform-provider-iru
 
 go 1.25.0
