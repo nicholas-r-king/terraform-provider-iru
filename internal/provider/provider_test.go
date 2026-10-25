@@ -88,6 +88,9 @@ func TestProtocolSchemaAndSensitiveAttributes(t *testing.T) {
 	if len(resp.ResourceSchemas) != 3 || resp.ResourceSchemas["iru_custom_script"] == nil || resp.ResourceSchemas["iru_custom_app"] == nil || resp.ResourceSchemas["iru_custom_profile"] == nil {
 		t.Fatal("unexpected registered resources")
 	}
+	if len(resp.DataSourceSchemas) != 2 || resp.DataSourceSchemas["iru_blueprint"] == nil || resp.DataSourceSchemas["iru_library_item"] == nil {
+		t.Fatal("unexpected registered lookup data sources")
+	}
 	var schemaResp fwprovider.SchemaResponse
 	(&IruProvider{}).Schema(ctx, fwprovider.SchemaRequest{}, &schemaResp)
 	if !schemaResp.Schema.Attributes["api_token"].IsSensitive() {

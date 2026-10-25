@@ -76,10 +76,13 @@ func (p *IruProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 	resp.ResourceData = c
+	resp.DataSourceData = c
 }
 
 func (*IruProvider) Resources(context.Context) []func() resource.Resource {
 	return []func() resource.Resource{NewCustomScriptResource, NewCustomAppResource, NewCustomProfileResource}
 }
 
-func (*IruProvider) DataSources(context.Context) []func() datasource.DataSource { return nil }
+func (*IruProvider) DataSources(context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{NewBlueprintDataSource, NewLibraryItemDataSource}
+}

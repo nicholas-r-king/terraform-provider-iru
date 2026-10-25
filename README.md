@@ -42,6 +42,12 @@ static defaults can plan changes to imported settings. Destroy permanently delet
 the Library Item and can affect assignments managed elsewhere. After an ambiguous
 creation failure, inspect/import the item before retrying.
 
+Read-only lookups use exact UUIDs:
+[Blueprint](docs/data-sources/blueprint.md) returns ID/name/type, and
+[Library Item](docs/data-sources/library_item.md) returns ID/name membership
+metadata within an existing Blueprint. They do not expose enrollment codes or
+device inventory, or manage assignment-node placement.
+
 ## Development
 
 Linux and macOS are the primary targets. Go 1.25 or later is required by the
