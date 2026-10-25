@@ -124,3 +124,20 @@ func TestProfilePartialCreateAndReadErrorState(t *testing.T) {
 		t.Fatal("unknown profile plan accepted")
 	}
 }
+
+func TestProfileUpdate404PreservesStateWithoutReplay(t *testing.T) {
+	ctx := context.Background()
+	state := profileStateFor(t, syntheticProfile())
+	calls := 0
+	r := mockedProfileResource(t, 404, "synthetic-token profile-content", func(req *http.Request) {
+		calls++
+		if req.Method != "PATCH" || req.Header.Get("Content-Type") != "application/x-www-form-urlencoded" {
+			t.Error("metadata-only profile update must use a concrete form body")
+		}
+	})
+	resp := resource.UpdateResponse{State: state}
+	r.Update(ctx, resource.UpdateRequest{Plan: tfsdk.Plan{Schema: state.Schema, Raw: state.Raw}, State: state}, &resp)
+	if !resp.Diagnostics.HasError() || calls != 1 || !resp.State.Raw.Equal(state.Raw) {
+		t.Fatal("Update 404 must diagnose, preserve prior state and avoid replay")
+	}
+}
