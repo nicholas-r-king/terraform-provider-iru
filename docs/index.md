@@ -8,7 +8,7 @@ description: |-
 
 # Iru Provider
 
-Development provider for Iru Custom Scripts. Prefer IRU_API_URL and IRU_API_TOKEN environment variables.
+Development provider for Iru Library Items. Prefer IRU_API_URL and IRU_API_TOKEN environment variables.
 
 This unofficial provider has no published Registry release. Local development
 requires a Terraform CLI development override pointing to the built executable.

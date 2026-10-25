@@ -40,7 +40,7 @@ func (p *IruProvider) Metadata(_ context.Context, _ provider.MetadataRequest, re
 
 func (p *IruProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Development provider for Iru Custom Scripts. Prefer IRU_API_URL and IRU_API_TOKEN environment variables.",
+		MarkdownDescription: "Development provider for Iru Library Items. Prefer IRU_API_URL and IRU_API_TOKEN environment variables.",
 		Attributes: map[string]schema.Attribute{
 			"api_url":   schema.StringAttribute{Optional: true, MarkdownDescription: "HTTPS tenant API origin; defaults to IRU_API_URL."},
 			"api_token": schema.StringAttribute{Optional: true, Sensitive: true, MarkdownDescription: "Bearer API token; defaults to IRU_API_TOKEN. Prefer the environment and keep credentials out of configuration."},
@@ -79,7 +79,7 @@ func (p *IruProvider) Configure(ctx context.Context, req provider.ConfigureReque
 }
 
 func (*IruProvider) Resources(context.Context) []func() resource.Resource {
-	return []func() resource.Resource{NewCustomScriptResource}
+	return []func() resource.Resource{NewCustomScriptResource, NewCustomAppResource}
 }
 
 func (*IruProvider) DataSources(context.Context) []func() datasource.DataSource { return nil }

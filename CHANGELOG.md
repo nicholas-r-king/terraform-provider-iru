@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Custom App Library Item CRUD/import using pre-uploaded installer keys, with
+  optional server-reported hash/size and metadata-only update handling.
 - Initial Framework provider and Custom Scripts CRUD/import with synthetic tests.
 - Strict API origins, redirect refusal, bounded read retries, redacted errors,
   stable UUID state and explicit import-default behavior.

@@ -37,7 +37,7 @@ such a restricted host, use `-skip-vet-reason "Application control blocks vet"`
 to run independent checks; skipped vet is not a pass. Do not disable security
 policy. Vet remains required on an unrestricted Linux/macOS validation host.
 
-Generate or check the two reference pages with the pinned official HashiCorp
+Generate or check the reference pages with the pinned official HashiCorp
 tool, exported local schema and existing Terraform executable:
 
 ```sh

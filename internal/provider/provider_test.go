@@ -85,7 +85,7 @@ func TestProtocolSchemaAndSensitiveAttributes(t *testing.T) {
 			t.Fatalf("schema error: %s", d.Detail)
 		}
 	}
-	if len(resp.ResourceSchemas) != 1 || resp.ResourceSchemas["iru_custom_script"] == nil {
+	if len(resp.ResourceSchemas) != 2 || resp.ResourceSchemas["iru_custom_script"] == nil || resp.ResourceSchemas["iru_custom_app"] == nil {
 		t.Fatal("unexpected registered resources")
 	}
 	var schemaResp fwprovider.SchemaResponse
