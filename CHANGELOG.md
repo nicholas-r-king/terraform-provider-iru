@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Custom Profile multipart content and metadata CRUD/import with explicit target
+  platforms, sensitive XML and no arbitrary whitespace normalization.
 - Custom App Library Item CRUD/import using pre-uploaded installer keys, with
   optional server-reported hash/size and metadata-only update handling.
 - Initial Framework provider and Custom Scripts CRUD/import with synthetic tests.

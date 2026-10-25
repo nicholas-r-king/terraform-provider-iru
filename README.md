@@ -4,7 +4,7 @@
 
 An unofficial development provider for Iru device management, built with the
 HashiCorp Terraform Plugin Framework. Resources include `iru_custom_script` and
-`iru_custom_app` (using an existing uploaded installer key).
+`iru_custom_app` (using an existing uploaded installer key), and `iru_custom_profile`.
 It does not manage Blueprint/Assignment Map or device assignments.
 
 This is a review milestone, not a production-ready release. Synthetic unit and
@@ -30,7 +30,8 @@ resource "iru_custom_script" "example" {
 
 See the [provider reference](docs/index.md),
 [Custom Script reference](docs/resources/custom_script.md),
-[Custom App reference](docs/resources/custom_app.md), and
+[Custom App reference](docs/resources/custom_app.md),
+[Custom Profile reference](docs/resources/custom_profile.md), and
 [complete local example](examples/custom_script/main.tf). Local use requires a
 Terraform CLI development override pointing to the built provider; `terraform
 init` cannot download this unpublished provider.

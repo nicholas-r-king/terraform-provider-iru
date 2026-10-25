@@ -79,7 +79,7 @@ func (p *IruProvider) Configure(ctx context.Context, req provider.ConfigureReque
 }
 
 func (*IruProvider) Resources(context.Context) []func() resource.Resource {
-	return []func() resource.Resource{NewCustomScriptResource, NewCustomAppResource}
+	return []func() resource.Resource{NewCustomScriptResource, NewCustomAppResource, NewCustomProfileResource}
 }
 
 func (*IruProvider) DataSources(context.Context) []func() datasource.DataSource { return nil }
