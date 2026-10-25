@@ -1,0 +1,15 @@
+*.exe
+/terraform-provider-iru
+/.tools/
+/.cache/
+/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+.env
+.env.*
+*.tfvars
+*.tfvars.json
+coverage.out
