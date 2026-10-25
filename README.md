@@ -41,10 +41,13 @@ creation failure, inspect/import the item before retrying.
 
 ## Development
 
-Go 1.25 or later is required by the pinned Framework; validation used Go 1.27.3 and
-Terraform 1.17.0 on Windows amd64. Run the manual checks described in
-[CONTRIBUTING.md](CONTRIBUTING.md). No tests in this repository contact a live Iru
-tenant. New providers, API fields, and acceptance tests require a verified contract.
+Linux and macOS are the primary targets. Go 1.25 or later is required by the
+pinned Framework. From the repository root, with Go and Terraform on PATH, run
+`go run ./tools verify -check-docs`. The same Go tooling works for optional Windows
+development; no PowerShell is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Runtime validation so far used Go 1.27.3 and Terraform 1.17.0 on Windows amd64;
+Linux/macOS native validation is still required. No tests contact a live Iru tenant.
+New resources, API fields, and acceptance tests require a verified contract.
 
 ## License
 

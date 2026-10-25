@@ -10,5 +10,7 @@
 - MPL-2.0 source licensing.
 - Local review improvements: versioned User-Agent, generated reference docs,
   standard examples and repeatable manual checks.
+- Portable Go contributor checks and documentation generation, with Linux/macOS
+  as primary targets and no PowerShell requirement.
 
 No Registry version or binary release has been published.
