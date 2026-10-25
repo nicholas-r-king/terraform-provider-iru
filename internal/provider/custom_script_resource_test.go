@@ -324,6 +324,23 @@ func TestWriteErrorsPreservePriorState(t *testing.T) {
 	}
 }
 
+func TestUpdate404PreservesManagedState(t *testing.T) {
+	ctx := context.Background()
+	prior := stateFor(t, syntheticModel())
+	calls := 0
+	r := mockedResource(t, 404, "not found", func(req *http.Request) {
+		calls++
+		if req.Method != "PATCH" {
+			t.Error("unexpected mutation method")
+		}
+	})
+	resp := resource.UpdateResponse{State: prior}
+	r.Update(ctx, resource.UpdateRequest{Plan: tfsdk.Plan{Schema: prior.Schema, Raw: prior.Raw}, State: prior}, &resp)
+	if !resp.Diagnostics.HasError() || !resp.State.Raw.Equal(prior.Raw) || calls != 1 {
+		t.Fatal("Update 404 must surface an error and preserve state without replay")
+	}
+}
+
 func TestMalformedCreateResponseRetainsKnownID(t *testing.T) {
 	ctx := context.Background()
 	model := syntheticModel()

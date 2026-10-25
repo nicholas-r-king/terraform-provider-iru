@@ -5,6 +5,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -99,5 +101,28 @@ func TestProtocolSchemaAndSensitiveAttributes(t *testing.T) {
 	}
 	if diags := schema.ValidateImplementation(ctx); diags.HasError() {
 		t.Fatal(diags)
+	}
+}
+
+func TestProviderBuildVersionReachesClient(t *testing.T) {
+	t.Setenv("IRU_API_URL", "https://synthetic.api.iru.com")
+	t.Setenv("IRU_API_TOKEN", "synthetic-token")
+	p := &IruProvider{version: "0.2.0-test", httpClient: &http.Client{Transport: syntheticTransport(func(req *http.Request) (*http.Response, error) {
+		if req.Header.Get("User-Agent") != "terraform-provider-iru/0.2.0-test" {
+			t.Error("provider version was not propagated")
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(modelJSON(t, syntheticModel())))}, nil
+	})}}
+	var resp fwprovider.ConfigureResponse
+	p.Configure(context.Background(), fwprovider.ConfigureRequest{Config: providerConfig(t, providerModel{types.StringNull(), types.StringNull()})}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	c, ok := resp.ResourceData.(*client.Client)
+	if !ok {
+		t.Fatal("missing client")
+	}
+	if _, err := c.GetScript(context.Background(), syntheticID); err != nil {
+		t.Fatal(err)
 	}
 }

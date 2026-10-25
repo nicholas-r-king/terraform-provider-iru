@@ -82,6 +82,48 @@ func TestCanonicalOriginUsesDocumentedPath(t *testing.T) {
 	}
 }
 
+func TestVersionedUserAgent(t *testing.T) {
+	for _, tc := range []struct {
+		name, version, want string
+		invalid             bool
+	}{
+		{"release", "0.2.0", "terraform-provider-iru/0.2.0", false},
+		{"prerelease", "v0.2.0-rc.1+build", "terraform-provider-iru/v0.2.0-rc.1+build", false},
+		{"development fallback", "", "terraform-provider-iru/dev", false},
+		{"header injection", "secret\r\nInjected: value", "", true},
+		{"oversized", strings.Repeat("a", 65), "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			c, err := NewWithVersion("https://synthetic.api.iru.com", testToken, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				calls++
+				if req.Header.Get("User-Agent") != tc.want {
+					t.Error("provider build version did not reach User-Agent")
+				}
+				return response(200, fixtureJSON(t, fixtureInput())), nil
+			})}, tc.version)
+			if tc.invalid {
+				if err == nil || calls != 0 {
+					t.Fatal("unsafe version accepted")
+				}
+				if strings.Contains(err.Error(), "secret") {
+					t.Fatal("unsafe version echoed in error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.GetScript(context.Background(), testID); err != nil {
+				t.Fatal(err)
+			}
+			if calls != 1 {
+				t.Fatal("unexpected request count")
+			}
+		})
+	}
+}
+
 func TestCRUDWireContract(t *testing.T) {
 	ctx := context.Background()
 	input := fixtureInput()

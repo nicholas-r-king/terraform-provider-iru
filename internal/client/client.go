@@ -25,12 +25,14 @@ const responseLimit = 2 * 1024 * 1024
 
 var tenantHost = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.api\.(?:eu\.)?(?:kandji\.io|iru\.com)$`)
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$`)
+var versionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 
 type Client struct {
-	baseURL string
-	token   string
-	http    *http.Client
-	sleep   func(context.Context, time.Duration) error
+	baseURL   string
+	token     string
+	http      *http.Client
+	sleep     func(context.Context, time.Duration) error
+	userAgent string
 }
 
 // String and GoString prevent accidental formatting of the client's token.
@@ -53,8 +55,21 @@ func ValidateConfig(baseURL, token string) error {
 // New accepts a custom HTTP transport for synthetic tests. The caller's client
 // is copied; redirects are always refused to prevent forwarding credentials.
 func New(baseURL, token string, httpClient *http.Client) (*Client, error) {
+	return NewWithVersion(baseURL, token, httpClient, "dev")
+}
+
+// NewWithVersion includes the build version in a nonsecret client identity.
+// An empty development version falls back to dev; header-unsafe values fail
+// before transport construction without echoing the supplied version.
+func NewWithVersion(baseURL, token string, httpClient *http.Client, version string) (*Client, error) {
 	if err := ValidateConfig(baseURL, token); err != nil {
 		return nil, err
+	}
+	if version == "" {
+		version = "dev"
+	}
+	if !versionPattern.MatchString(version) {
+		return nil, errors.New("provider version is not safe for an HTTP User-Agent")
 	}
 	hc := http.Client{Timeout: 30 * time.Second}
 	if httpClient != nil {
@@ -66,7 +81,7 @@ func New(baseURL, token string, httpClient *http.Client) (*Client, error) {
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	origin, _ := url.Parse(baseURL) // ValidateConfig already parsed and checked it.
 	canonical := (&url.URL{Scheme: origin.Scheme, Host: origin.Host}).String()
-	return &Client{baseURL: canonical, token: token, http: &hc, sleep: sleep}, nil
+	return &Client{baseURL: canonical, token: token, http: &hc, sleep: sleep, userAgent: "terraform-provider-iru/" + version}, nil
 }
 
 func sleep(ctx context.Context, delay time.Duration) error {
@@ -139,7 +154,7 @@ func (c *Client) request(ctx context.Context, method, path string, payload any, 
 		}
 		req.Header.Set("Authorization", "Bearer "+c.token)
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "terraform-provider-iru/dev")
+		req.Header.Set("User-Agent", c.userAgent)
 		if payload != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}

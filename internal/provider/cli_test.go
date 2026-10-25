@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -85,7 +86,11 @@ func TestTerraformCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(pluginDir, "terraform-provider-iru.exe"), binary, 0700); err != nil {
+	pluginName := "terraform-provider-iru"
+	if runtime.GOOS == "windows" {
+		pluginName += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, pluginName), binary, 0700); err != nil {
 		t.Fatal(err)
 	}
 	rc := filepath.Join(dir, "terraform.tfrc")

@@ -70,7 +70,7 @@ func (p *IruProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	if !config.APIToken.IsNull() {
 		token = config.APIToken.ValueString()
 	}
-	c, err := client.New(baseURL, token, p.httpClient)
+	c, err := client.NewWithVersion(baseURL, token, p.httpClient, p.version)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid Iru provider configuration", err.Error())
 		return
