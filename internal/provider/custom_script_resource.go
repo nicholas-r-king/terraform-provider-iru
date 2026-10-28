@@ -137,8 +137,8 @@ func (data scriptModel) hasUnknownInput() bool {
 
 func scriptState(script client.Script, prior scriptModel) scriptModel {
 	data := scriptModel{
-		ID: types.StringValue(script.ID), Name: types.StringValue(script.Name), Script: types.StringValue(script.Script),
-		RemediationScript: types.StringValue(script.RemediationScript), ExecutionFrequency: types.StringValue(script.ExecutionFrequency),
+		ID: types.StringValue(script.ID), Name: types.StringValue(script.Name), Script: scriptValue(script.Script, prior.Script),
+		RemediationScript: scriptValue(script.RemediationScript, prior.RemediationScript), ExecutionFrequency: types.StringValue(script.ExecutionFrequency),
 		Active: types.BoolValue(script.Active), Restart: types.BoolValue(script.Restart), ShowInSelfService: types.BoolValue(script.ShowInSelfService),
 		SelfServiceCategoryID: types.StringNull(), SelfServiceRecommended: types.BoolValue(false),
 	}

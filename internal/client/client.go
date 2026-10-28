@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Package client implements only the documented Iru Custom Scripts API.
+// Package client implements selected documented Iru Library Item operations.
 // It deliberately does not log headers, URLs, request/response bodies, or tokens.
 package client
 
@@ -105,19 +105,19 @@ func (e *APIError) Error() string {
 	hint := "check endpoint permissions and API availability"
 	switch e.StatusCode {
 	case 400, 422:
-		hint = "Iru rejected the Custom Script fields; check the documented constraints"
+		hint = "Iru rejected the fields; check the documented constraints"
 	case 401:
 		hint = "check IRU_API_TOKEN"
 	case 403:
-		hint = "the token needs permission for this Custom Scripts operation"
+		hint = "the token needs permission for this operation"
 	case 404:
-		hint = "the Custom Script was not found"
+		hint = "the requested object was not found"
 	case 429:
 		hint = "rate limit reached; retry later"
 	case 301, 302, 303, 307, 308:
 		hint = "redirect refused; verify the tenant API origin"
 	}
-	return fmt.Sprintf("Iru %s Custom Scripts returned HTTP %d: %s (response body withheld)", e.Method, e.StatusCode, hint)
+	return fmt.Sprintf("Iru %s API returned HTTP %d: %s (response body withheld)", e.Method, e.StatusCode, hint)
 }
 
 func IsNotFound(err error) bool {
@@ -128,18 +128,22 @@ func IsNotFound(err error) bool {
 func ValidID(id string) bool { return uuidPattern.MatchString(id) }
 
 func (c *Client) request(ctx context.Context, method, path string, payload any, success int) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
 	var body []byte
 	if payload != nil {
 		var err error
 		body, err = json.Marshal(payload)
 		if err != nil {
-			return nil, errors.New("could not encode Custom Script request (content withheld)")
+			return nil, errors.New("could not encode Iru request (content withheld)")
 		}
-		if len(body) > responseLimit {
-			return nil, errors.New("Custom Script request exceeds the 2 MiB safety limit")
-		}
+	}
+	return c.requestEncoded(ctx, method, path, body, "application/json", success)
+}
+
+func (c *Client) requestEncoded(ctx context.Context, method, path string, body []byte, contentType string, success int) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	if len(body) > responseLimit {
+		return nil, errors.New("Iru request exceeds the 2 MiB safety limit")
 	}
 	// Only reads are replayed. A failed write can have reached Iru; automatically
 	// replaying POST/PATCH/DELETE would risk duplicate or ambiguous mutations.
@@ -155,8 +159,8 @@ func (c *Client) request(ctx context.Context, method, path string, payload any, 
 		req.Header.Set("Authorization", "Bearer "+c.token)
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", c.userAgent)
-		if payload != nil {
-			req.Header.Set("Content-Type", "application/json")
+		if body != nil {
+			req.Header.Set("Content-Type", contentType)
 		}
 		resp, err := c.http.Do(req)
 		if err != nil {

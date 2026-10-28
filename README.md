@@ -3,12 +3,13 @@
 # Terraform provider for Iru
 
 An unofficial development provider for Iru device management, built with the
-HashiCorp Terraform Plugin Framework. The first resource is `iru_custom_script`.
+HashiCorp Terraform Plugin Framework. Resources include `iru_custom_script` and
+`iru_custom_app` (using an existing uploaded installer key), and `iru_custom_profile`.
 It does not manage Blueprint/Assignment Map or device assignments.
 
-This is a review milestone, not a production-ready release. Synthetic unit and
-Terraform CLI tests pass; real Iru compatibility has not been acceptance-tested.
-Vet remains incomplete in the current Windows validation environment. No Registry
+This is a development provider. Real Iru compatibility has not been
+acceptance-tested. CI checks synthetic unit, Framework and Terraform CLI behavior
+on Linux and macOS; check the commit's results before using a build. No Registry
 release or installable published version exists yet.
 
 ## Configuration and examples
@@ -28,7 +29,9 @@ resource "iru_custom_script" "example" {
 ```
 
 See the [provider reference](docs/index.md),
-[Custom Script reference](docs/resources/custom_script.md), and
+[Custom Script reference](docs/resources/custom_script.md),
+[Custom App reference](docs/resources/custom_app.md),
+[Custom Profile reference](docs/resources/custom_profile.md), and
 [complete local example](examples/custom_script/main.tf). Local use requires a
 Terraform CLI development override pointing to the built provider; `terraform
 init` cannot download this unpublished provider.
@@ -39,14 +42,20 @@ static defaults can plan changes to imported settings. Destroy permanently delet
 the Library Item and can affect assignments managed elsewhere. After an ambiguous
 creation failure, inspect/import the item before retrying.
 
+Read-only lookups use exact UUIDs:
+[Blueprint](docs/data-sources/blueprint.md) returns ID/name/type, and
+[Library Item](docs/data-sources/library_item.md) returns ID/name membership
+metadata within an existing Blueprint. They do not expose enrollment codes or
+device inventory, or manage assignment-node placement.
+
 ## Development
 
 Linux and macOS are the primary targets. Go 1.25 or later is required by the
 pinned Framework. From the repository root, with Go and Terraform on PATH, run
 `go run ./tools verify -check-docs`. The same Go tooling works for optional Windows
 development; no PowerShell is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
-Runtime validation so far used Go 1.27.3 and Terraform 1.17.0 on Windows amd64;
-Linux/macOS native validation is still required. No tests contact a live Iru tenant.
+CI uses Terraform 1.17.0 with Go 1.25.0 and 1.27.3. Linux/macOS amd64 and arm64
+have native test jobs. No provider repository tests contact a live Iru tenant.
 New resources, API fields, and acceptance tests require a verified contract.
 
 ## License

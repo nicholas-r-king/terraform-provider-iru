@@ -28,6 +28,10 @@ Legacy responses that omit Self Service metadata while using `no_enforcement`
 are rejected because their settings cannot be reconstructed safely. The provider
 does not send undocumented null values to clear hidden category metadata.
 
+Iru can strip outer script whitespace. Known configured spelling is retained for
+equivalent responses; substantive changes remain drift. Imported scripts should
+match the returned content for the first no-op plan.
+
 ## Example Usage
 
 {{ range .ExampleFiles }}

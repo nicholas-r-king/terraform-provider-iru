@@ -10,9 +10,10 @@ source and identify its license before adding it.
 
 ## Manual checks
 
-Linux and macOS are the primary contributor platforms. Install Go and Terraform
-through your existing trusted workflow and run these commands from the repository
-root. The contributor tool is written in Go; no PowerShell, Bash, Make or other
+Linux and macOS are the primary contributor platforms. Provider builds require
+Go 1.25.0 or later; the pinned documentation generator requires Go 1.25.8 or later.
+Install Go and Terraform through your existing trusted workflow and run these
+commands from the repository root. The contributor tool is written in Go; no PowerShell, Bash, Make or other
 shell-specific runtime is required. Windows contributors can use the same commands.
 
 ```sh
@@ -32,12 +33,11 @@ enables it automatically when Terraform is available. Without Terraform, plain
 The tool gives child processes an isolated environment: tenant credentials,
 Terraform overrides/debug settings and cross-compilation targets are not inherited.
 Only synthetic configuration is used. Build outputs stay in ignored `.cache/`.
-On the current Windows validation host, application control blocks vet. Only on
-such a restricted host, use `-skip-vet-reason "Application control blocks vet"`
-to run independent checks; skipped vet is not a pass. Do not disable security
-policy. Vet remains required on an unrestricted Linux/macOS validation host.
+If local controls block execution, do not disable them or route around the
+restriction. Compile-only checks are not runtime test passes. Vet and runtime
+tests remain required in CI; `-skip-vet-reason` records a local skip explicitly.
 
-Generate or check the two reference pages with the pinned official HashiCorp
+Generate or check the reference pages with the pinned official HashiCorp
 tool, exported local schema and existing Terraform executable:
 
 ```sh
@@ -65,15 +65,18 @@ provider documentation.
   saved-state tests for each supported prior version directly to the current one.
 - Treat 404 refresh as disappearance; auth and update errors retain state.
   Never replay ambiguous POSTs or invent an undocumented idempotency key.
-  Pagination is needed only if a documented list endpoint is introduced.
+  Library Item lookups must validate and bound pagination on the tenant origin.
 
 ## CI and release gates
 
-No CI/release workflow is enabled by this milestone. A later approved CI setup
-should run format/build/vet/lint, unit and mocked Terraform acceptance tests on
-declared supported versions/platforms, plus a generated-doc clean-diff check.
-Pin Actions to immutable SHAs, use minimum read permissions for validation, keep
-fork PR jobs free of secrets, and separate any authorized live tests/releases.
+The Tests workflow runs formatting, build, vet, unit/Framework and mocked
+Terraform CLI lifecycle tests, example formatting and a generated-doc clean-diff
+check. It covers native Linux/macOS amd64 and arm64, plus minimum Go 1.25.0 on
+Linux amd64, using Terraform 1.17.0. Documentation checks use Go 1.27.3; the
+Go 1.25.0 job checks the provider without running the documentation generator.
+Actions are pinned to immutable SHAs with
+read-only repository permissions and no tenant secrets. There is no release or
+live-test workflow in this repository.
 
 Before a Registry release: choose a SemVer tag and changelog, verify the declared
 Go/Terraform minimums, build and smoke-test each supported OS/architecture,
@@ -81,15 +84,12 @@ package applicable license/copyright/NOTICE material and MPL source locations,
 and create correctly named ZIPs, protocol manifest, SHA256 sums and checksum
 signature under the current [publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing).
 Linux/macOS amd64 and arm64 are the primary target matrix; Windows is optional.
-The provider, contributor tool and mock CLI test binary cross-compile for all four
-Linux/macOS targets with Go 1.27.3 and CGO disabled. Only Windows amd64 has been
-runtime-tested so far; cross-compilation does not establish runtime compatibility.
-Before claiming Linux/macOS support, run
-`go run ./tools verify -check-docs` natively on those targets, including the
-loopback mock lifecycle and a built-provider install/schema smoke test. Then test
-the declared minimum Go/Terraform versions. The manifest declares protocol 6.
+Cross-compilation does not establish runtime compatibility. Require passing
+native CI results for the exact commit, including loopback mock lifecycles and
+schema export from the built provider. Terraform versions other than 1.17.0 have
+not been validated. The manifest declares protocol 6.
 
-Signing keys, Registry access, workflows, release publication and real tenant
-access require separate authorization. Never replace a released artifact; make
-a new version. SBOM/attestation policy can be decided for release packaging and
-is not claimed here as a universal Terraform Registry requirement.
+Never replace a released artifact; make a new version. Keep signing keys,
+Registry publication and live tenant validation separate from secret-free
+provider checks. SBOM/attestation policy is a release-packaging decision and is
+not claimed here as a universal Terraform Registry requirement.
