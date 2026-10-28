@@ -14,9 +14,11 @@
 - Strict API origins, redirect refusal, bounded read retries, redacted errors,
   stable UUID state and explicit import-default behavior.
 - MPL-2.0 source licensing.
-- Local review improvements: versioned User-Agent, generated reference docs,
+- Versioned User-Agent, generated reference docs,
   standard examples and repeatable manual checks.
 - Portable Go contributor checks and documentation generation, with Linux/macOS
   as primary targets and no PowerShell requirement.
+- Secret-free native Linux/macOS amd64/arm64 CI for builds, unit/Framework and
+  mock Terraform lifecycles, vet, examples and deterministic schema-based docs.
 
 No Registry version or binary release has been published.
