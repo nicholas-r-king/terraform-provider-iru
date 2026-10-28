@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MPL-2.0
+
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feat/library-resources-and-lookups
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: ${{ matrix.os }} / Go ${{ matrix.go }} / Terraform ${{ matrix.terraform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            go: '1.25.0'
+            terraform: '1.17.0'
+          - os: ubuntu-24.04
+            go: '1.27.3'
+            terraform: '1.17.0'
+          - os: ubuntu-24.04-arm
+            go: '1.27.3'
+            terraform: '1.17.0'
+          - os: macos-15-intel
+            go: '1.27.3'
+            terraform: '1.17.0'
+          - os: macos-15
+            go: '1.27.3'
+            terraform: '1.17.0'
+    env:
+      GOTOOLCHAIN: local
+      CHECKPOINT_DISABLE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Build, test, vet and check generated documentation
+        run: go run ./tools verify -check-docs
+      - name: Require a clean generated diff
+        run: git diff --exit-code

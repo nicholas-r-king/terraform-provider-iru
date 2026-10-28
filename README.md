@@ -7,9 +7,9 @@ HashiCorp Terraform Plugin Framework. Resources include `iru_custom_script` and
 `iru_custom_app` (using an existing uploaded installer key), and `iru_custom_profile`.
 It does not manage Blueprint/Assignment Map or device assignments.
 
-This is a review milestone, not a production-ready release. Synthetic unit and
-Terraform CLI tests pass; real Iru compatibility has not been acceptance-tested.
-Vet remains incomplete in the current Windows validation environment. No Registry
+This is a development provider. Real Iru compatibility has not been
+acceptance-tested. CI checks synthetic unit, Framework and Terraform CLI behavior
+on Linux and macOS; check the commit's results before using a build. No Registry
 release or installable published version exists yet.
 
 ## Configuration and examples
@@ -54,8 +54,8 @@ Linux and macOS are the primary targets. Go 1.25 or later is required by the
 pinned Framework. From the repository root, with Go and Terraform on PATH, run
 `go run ./tools verify -check-docs`. The same Go tooling works for optional Windows
 development; no PowerShell is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
-Runtime validation so far used Go 1.27.3 and Terraform 1.17.0 on Windows amd64;
-Linux/macOS native validation is still required. No tests contact a live Iru tenant.
+CI uses Terraform 1.17.0 with Go 1.25.0 and 1.27.3. Linux/macOS amd64 and arm64
+have native test jobs. No provider repository tests contact a live Iru tenant.
 New resources, API fields, and acceptance tests require a verified contract.
 
 ## License
