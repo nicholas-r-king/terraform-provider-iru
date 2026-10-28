@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Allowlisted write-validation field names and explicit error codes for HTTP
+  400/422, with bounded parsing and no response messages or values in errors.
 - UUID-only Blueprint and Blueprint-scoped Library Item metadata data sources
   with allowlisted outputs and bounded, origin-checked pagination.
 - Custom Profile multipart content and metadata CRUD/import with explicit target
