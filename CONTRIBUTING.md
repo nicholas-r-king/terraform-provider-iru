@@ -10,9 +10,10 @@ source and identify its license before adding it.
 
 ## Manual checks
 
-Linux and macOS are the primary contributor platforms. Install Go and Terraform
-through your existing trusted workflow and run these commands from the repository
-root. The contributor tool is written in Go; no PowerShell, Bash, Make or other
+Linux and macOS are the primary contributor platforms. Provider builds require
+Go 1.25.0 or later; the pinned documentation generator requires Go 1.25.8 or later.
+Install Go and Terraform through your existing trusted workflow and run these
+commands from the repository root. The contributor tool is written in Go; no PowerShell, Bash, Make or other
 shell-specific runtime is required. Windows contributors can use the same commands.
 
 ```sh
@@ -71,7 +72,9 @@ provider documentation.
 The Tests workflow runs formatting, build, vet, unit/Framework and mocked
 Terraform CLI lifecycle tests, example formatting and a generated-doc clean-diff
 check. It covers native Linux/macOS amd64 and arm64, plus minimum Go 1.25.0 on
-Linux amd64, using Terraform 1.17.0. Actions are pinned to immutable SHAs with
+Linux amd64, using Terraform 1.17.0. Documentation checks use Go 1.27.3; the
+Go 1.25.0 job checks the provider without running the documentation generator.
+Actions are pinned to immutable SHAs with
 read-only repository permissions and no tenant secrets. There is no release or
 live-test workflow in this repository.
 

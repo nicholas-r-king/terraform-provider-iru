@@ -55,6 +55,10 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - name: Build, test, vet and check generated documentation
+        if: matrix.go != '1.25.0'
         run: go run ./tools verify -check-docs
+      - name: Verify minimum provider Go version
+        if: matrix.go == '1.25.0'
+        run: go run ./tools verify
       - name: Require a clean generated diff
         run: git diff --exit-code
