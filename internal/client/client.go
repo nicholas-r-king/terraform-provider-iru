@@ -95,10 +95,12 @@ func sleep(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-// APIError contains only the method and status, never raw response content.
+// APIError retains only status and allowlisted validation metadata, never raw
+// response content, headers, request values or free-form server messages.
 type APIError struct {
 	Method     string
 	StatusCode int
+	validation []validationIssue
 }
 
 func (e *APIError) Error() string {
@@ -116,6 +118,13 @@ func (e *APIError) Error() string {
 		hint = "rate limit reached; retry later"
 	case 301, 302, 303, 307, 308:
 		hint = "redirect refused; verify the tenant API origin"
+	}
+	if len(e.validation) > 0 {
+		var issues []string
+		for _, issue := range e.validation {
+			issues = append(issues, issue.field+"="+issue.code)
+		}
+		hint += "; validation fields: " + strings.Join(issues, ", ")
 	}
 	return fmt.Sprintf("Iru %s API returned HTTP %d: %s (response body withheld)", e.Method, e.StatusCode, hint)
 }
@@ -170,7 +179,9 @@ func (c *Client) requestEncoded(ctx context.Context, method, path string, body [
 			return nil, errors.New("Iru transport failed or timed out (details withheld); a write may have succeeded; inspect/import the item before retrying creation")
 		}
 		if resp.StatusCode != success {
-			// Do not read error bodies: they may echo tokens or script contents.
+			// Validation responses can identify rejected fields without exposing
+			// their values/messages. All other error bodies remain unread.
+			issues := readValidationIssues(resp.Body, method, path, resp.StatusCode)
 			resp.Body.Close()
 			retryable := resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504
 			if retryable && attempt+1 < attempts {
@@ -182,7 +193,7 @@ func (c *Client) requestEncoded(ctx context.Context, method, path string, body [
 					continue
 				}
 			}
-			return nil, &APIError{Method: method, StatusCode: resp.StatusCode}
+			return nil, &APIError{Method: method, StatusCode: resp.StatusCode, validation: issues}
 		}
 		if success == http.StatusNoContent {
 			resp.Body.Close()

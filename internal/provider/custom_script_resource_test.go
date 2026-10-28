@@ -69,6 +69,20 @@ func mockedResource(t *testing.T, status int, body string, check func(*http.Requ
 	return &CustomScriptResource{client: c}
 }
 
+func TestScriptValidationDiagnosticsWithholdResponseContents(t *testing.T) {
+	ctx := context.Background()
+	state := stateFor(t, syntheticModel())
+	calls := 0
+	r := mockedResource(t, 400, `{"remediation_script":[{"code":"blank","message":"synthetic-token confidential response content"}]}`, func(*http.Request) { calls++ })
+	resp := resource.CreateResponse{State: state}
+	r.Create(ctx, resource.CreateRequest{Plan: tfsdk.Plan{Schema: state.Schema, Raw: state.Raw}}, &resp)
+	text := fmt.Sprint(resp.Diagnostics)
+	if !resp.Diagnostics.HasError() || calls != 1 || !strings.Contains(text, "remediation_script=blank") ||
+		strings.Contains(text, "synthetic-token") || strings.Contains(text, "confidential response content") {
+		t.Fatal("resource did not preserve safe validation metadata or redacted content")
+	}
+}
+
 func modelJSON(t *testing.T, model scriptModel) string {
 	t.Helper()
 	data, err := json.Marshal(client.Script{ID: syntheticID, ScriptInput: model.input()})
