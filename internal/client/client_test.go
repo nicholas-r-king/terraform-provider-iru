@@ -156,8 +156,17 @@ func TestCRUDWireContract(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatal(err)
 			}
-			if len(payload) != 7 || payload["name"] != input.Name || payload["script"] != input.Script || payload["remediation_script"] != "" || payload["execution_frequency"] != "once" || payload["active"] != false || payload["restart"] != false || payload["show_in_self_service"] != false {
-				t.Error("request does not match documented script fields; false/empty values must be sent")
+			wantFields := 7
+			if r.Method == "POST" {
+				wantFields = 6
+				if _, exists := payload["remediation_script"]; exists {
+					t.Error("create must omit absent remediation content")
+				}
+			} else if payload["remediation_script"] != "" {
+				t.Error("update must explicitly request remediation removal")
+			}
+			if len(payload) != wantFields || payload["name"] != input.Name || payload["script"] != input.Script || payload["execution_frequency"] != "once" || payload["active"] != false || payload["restart"] != false || payload["show_in_self_service"] != false {
+				t.Error("request does not match documented script fields")
 			}
 		}
 		switch r.Method {

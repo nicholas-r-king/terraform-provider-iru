@@ -37,6 +37,10 @@ func validationFields(endpoint string) map[string]string {
 		fields = []string{"name", "file_key", "install_type", "install_enforcement", "audit_script", "preinstall_script", "postinstall_script", "unzip_location", "active", "restart", "show_in_self_service", "self_service_category_id", "self_service_recommended"}
 	case managedValidationEndpoint(endpoint, profilesPath):
 		fields = []string{"name", "file", "active", "runs_on_mac", "runs_on_iphone", "runs_on_ipad", "runs_on_tv", "runs_on_vision"}
+	case managedValidationEndpoint(endpoint, blueprintsPath):
+		fields = []string{"name", "type", "description", "color", "icon", "enrollment_code.code", "enrollment_code.is_active", "source.type", "source.id"}
+	case managedValidationEndpoint(endpoint, tagsPath):
+		fields = []string{"name"}
 	default:
 		return nil
 	}

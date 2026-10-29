@@ -85,7 +85,7 @@ func TestProtocolSchemaAndSensitiveAttributes(t *testing.T) {
 			t.Fatalf("schema error: %s", d.Detail)
 		}
 	}
-	if len(resp.ResourceSchemas) != 3 || resp.ResourceSchemas["iru_custom_script"] == nil || resp.ResourceSchemas["iru_custom_app"] == nil || resp.ResourceSchemas["iru_custom_profile"] == nil {
+	if len(resp.ResourceSchemas) != 5 || resp.ResourceSchemas["iru_custom_script"] == nil || resp.ResourceSchemas["iru_custom_app"] == nil || resp.ResourceSchemas["iru_custom_profile"] == nil || resp.ResourceSchemas["iru_blueprint"] == nil || resp.ResourceSchemas["iru_tag"] == nil {
 		t.Fatal("unexpected registered resources")
 	}
 	if len(resp.DataSourceSchemas) != 2 || resp.DataSourceSchemas["iru_blueprint"] == nil || resp.DataSourceSchemas["iru_library_item"] == nil {

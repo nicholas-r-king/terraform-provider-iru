@@ -5,7 +5,9 @@
 An unofficial development provider for Iru device management, built with the
 HashiCorp Terraform Plugin Framework. Resources include `iru_custom_script` and
 `iru_custom_app` (using an existing uploaded installer key), and `iru_custom_profile`.
-It does not manage Blueprint/Assignment Map or device assignments.
+It also manages `iru_blueprint` metadata/enrollment settings and `iru_tag`.
+Assignment Map nodes, parameters, and Library Item/device assignments are not
+managed. See [API coverage](API_COVERAGE.md) for the remaining API gaps.
 
 This is a development provider. Real Iru compatibility has not been
 acceptance-tested. CI checks synthetic unit, Framework and Terraform CLI behavior
