@@ -35,7 +35,11 @@ does not send undocumented null values to clear hidden category metadata.
 
 Iru can strip outer script whitespace. Known configured spelling is retained for
 equivalent responses; substantive changes remain drift. Imported scripts should
-match the returned content for the first no-op plan.
+match the returned content for the first no-op plan. If your local file differs
+only by the outer whitespace removed by Iru, use `script = trimspace(file("audit.sh"))`
+when adopting it. Import cannot reconstruct the original file's formatting.
+Import and plan perform no API writes; review any substantive content difference
+before applying it.
 
 ## Example Usage
 
