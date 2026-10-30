@@ -41,6 +41,16 @@ func validationFields(endpoint string) map[string]string {
 		fields = []string{"name", "type", "description", "color", "icon", "enrollment_code.code", "enrollment_code.is_active", "source.type", "source.id"}
 	case managedValidationEndpoint(endpoint, tagsPath):
 		fields = []string{"name"}
+	case managedValidationEndpoint(endpoint, inHouseAppsPath):
+		fields = []string{"name", "file_key", "active", "runs_on_iphone", "runs_on_ipad", "runs_on_tv"}
+	case endpoint == adePath+"/" || managedValidationEndpoint(endpoint, adePath) || (strings.HasPrefix(endpoint, adePath+"/") && strings.HasSuffix(endpoint, "/renew") && ValidID(strings.TrimSuffix(strings.TrimPrefix(endpoint, adePath+"/"), "/renew"))):
+		fields = []string{"blueprint_id", "phone", "email", "file"}
+	case strings.HasPrefix(endpoint, "/api/v1/devices/"):
+		parts := strings.Split(strings.TrimPrefix(endpoint, "/api/v1/devices/"), "/")
+		if (len(parts) != 2 && len(parts) != 3) || !ValidID(parts[0]) || parts[1] != "notes" || (len(parts) == 3 && !ValidID(parts[2])) {
+			return nil
+		}
+		fields = []string{"content"}
 	default:
 		return nil
 	}
