@@ -13,13 +13,13 @@ a particular tenant or token. Synthetic tests and live acceptance are separate.
 | Custom App | CRUD, upload | Resource with existing file key; upload automation incomplete |
 | Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
 | Tag | CRUD; read via paginated list | Resource; import, drift and disappearance handling |
-| In-House App | CRUD, upload and upload status | Pending |
-| ADE integration | CRUD and token renewal | Pending; needs an Apple server token for live create/renew |
-| Device Note | CRUD | Pending; live validation needs an explicitly selected disposable device |
+| In-House App | CRUD, upload and upload status | Resource with validated file key; upload automation incomplete; live lifecycle unverified |
+| ADE integration | CRUD and token renewal | Resource with write-only token input and local renewal version; live create/renew needs an Apple server token |
+| Device Note | CRUD | Resource with composite UUID import; live validation needs a selected disposable device |
 | Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |
 | Blueprint routing | Read and update enrollment settings | Pending; routing rule editing is not documented |
 | Device/ADE device metadata | Read and PATCH selected fields | Pending; enrollment is external, so full object CRUD is unavailable |
-| Self Service category | List only | Lookup pending; no documented create/update/delete |
+| Self Service category | List only | ID/name lookup through configuration inventory; no documented create/update/delete |
 | Directory user | Read/delete only | Lookup pending; creation/update belongs to the directory integration |
 | Device inventory, activity, status, licensing, audit, vulnerability data | Read-oriented API | Reporting scope; does not provide configuration CRUD |
 | Device commands | One-shot operational actions | Not configuration resources; enrollment/deletion/erase are not CRUD equivalents |
