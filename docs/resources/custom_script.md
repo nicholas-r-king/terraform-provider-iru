@@ -71,7 +71,7 @@ resource "iru_custom_script" "example" {
 
 - `active` (Boolean) Whether the Library Item is active. Defaults to false.
 - `execution_frequency` (String) once, every_15_min, every_day, or no_enforcement. no_enforcement requires Self Service and a category.
-- `remediation_script` (String, Sensitive) Remediation content; empty string removes it. Stored in Terraform state.
+- `remediation_script` (String, Sensitive) Remediation content. Omitted on creation when absent; clearing existing content is currently unsupported. Stored in Terraform state.
 - `restart` (Boolean) Whether to restart after running. Defaults to false.
 - `self_service_category_id` (String) Existing Self Service category UUID. Set only while show_in_self_service is true.
 - `self_service_recommended` (Boolean) Recommend in Self Service; true requires show_in_self_service.
