@@ -223,7 +223,12 @@ func (r *CustomScriptResource) Update(ctx context.Context, req resource.UpdateRe
 		resp.Diagnostics.AddError("Iru client unavailable", "Configure the Iru provider before updating a script.")
 		return
 	}
-	updated, err := r.client.UpdateScript(ctx, data.ID.ValueString(), data.input())
+	var prior scriptModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	updated, err := r.client.UpdateScript(ctx, data.ID.ValueString(), data.input(), prior.input())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update Iru Custom Script", err.Error())
 		return

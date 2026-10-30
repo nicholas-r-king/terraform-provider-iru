@@ -5,6 +5,8 @@
 Coverage is based on the [official Iru Endpoint Management API collection](https://api-docs.iru.com/api/collections/15284493/TzCTZkBe?segregateAuth=true&versionTag=latest),
 reviewed 2026-10-29. An API endpoint existing does not establish that it works with
 a particular tenant or token. Synthetic tests and live acceptance are separate.
+Unresolved public contracts and the evidence needed to implement them are listed
+in [API contract gaps](API_CONTRACT_GAPS.md).
 
 | Object | Documented contract | Provider support |
 | --- | --- | --- |

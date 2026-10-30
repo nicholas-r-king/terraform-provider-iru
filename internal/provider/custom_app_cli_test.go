@@ -52,9 +52,20 @@ func TestTerraformCLIApp(t *testing.T) {
 				return
 			}
 			input := model.input()
-			input.Name, input.InstallType, input.InstallEnforcement = req.Form.Get("name"), req.Form.Get("install_type"), req.Form.Get("install_enforcement")
-			input.AuditScript, input.PreinstallScript, input.PostinstallScript, input.UnzipLocation = req.Form.Get("audit_script"), req.Form.Get("preinstall_script"), req.Form.Get("postinstall_script"), req.Form.Get("unzip_location")
-			input.Active, input.Restart = req.Form.Get("active") == "true", req.Form.Get("restart") == "true"
+			if req.Method == "PATCH" {
+				input = object.AppInput
+			}
+			for key, value := range map[string]*string{"name": &input.Name, "install_type": &input.InstallType, "install_enforcement": &input.InstallEnforcement, "audit_script": &input.AuditScript, "preinstall_script": &input.PreinstallScript, "postinstall_script": &input.PostinstallScript, "unzip_location": &input.UnzipLocation} {
+				if req.Form.Has(key) {
+					*value = req.Form.Get(key)
+				}
+			}
+			if req.Form.Has("active") {
+				input.Active = req.Form.Get("active") == "true"
+			}
+			if req.Form.Has("restart") {
+				input.Restart = req.Form.Get("restart") == "true"
+			}
 			if object != nil {
 				input.FileKey = object.FileKey
 			}

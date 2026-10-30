@@ -269,7 +269,7 @@ func (r *CustomAppResource) Update(ctx context.Context, req resource.UpdateReque
 		resp.Diagnostics.AddError("Unresolved Custom App installer", "Resolve the installer key or local upload before updating the Library Item.")
 		return
 	}
-	app, err := r.client.UpdateApp(ctx, data.ID.ValueString(), data.input(), data.FileKey.ValueString() != prior.FileKey.ValueString())
+	app, err := r.client.UpdateApp(ctx, data.ID.ValueString(), data.input(), data.FileKey.ValueString() != prior.FileKey.ValueString(), prior.input())
 	if err == nil && !uploadedInstallerMatches(data.SourceFile, data.SourceSHA256, data.FileKey.ValueString(), app.FileKey, app.SHA256) {
 		err = errors.New("Iru Custom App installer metadata does not match the managed source")
 	}

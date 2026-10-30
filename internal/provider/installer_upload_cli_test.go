@@ -120,7 +120,20 @@ func TestTerraformCLIInstallerUploads(t *testing.T) {
 								replacements++
 							}
 						}
-						input := client.AppInput{Name: req.Form.Get("name"), FileKey: key, InstallType: req.Form.Get("install_type"), InstallEnforcement: req.Form.Get("install_enforcement"), Active: req.Form.Get("active") == "true"}
+						input := client.AppInput{}
+						if app != nil && req.Method == "PATCH" {
+							input = app.AppInput
+						}
+						input.Name, input.FileKey = req.Form.Get("name"), key
+						if req.Form.Has("install_type") {
+							input.InstallType = req.Form.Get("install_type")
+						}
+						if req.Form.Has("install_enforcement") {
+							input.InstallEnforcement = req.Form.Get("install_enforcement")
+						}
+						if req.Form.Has("active") {
+							input.Active = req.Form.Get("active") == "true"
+						}
 						if input.Validate() != nil {
 							t.Error("invalid custom-app metadata")
 							w.WriteHeader(400)

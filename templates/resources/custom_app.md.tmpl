@@ -19,6 +19,11 @@ never sent to S3, and signed upload credentials are not stored in state.
 Metadata-only updates retain the existing installer; changing the configured
 checksum uploads new bytes and replaces its reference in place.
 
+Creation omits absent optional script/location fields. Updates retain a nonblank
+name and omit unchanged optional fields rather than resending blank defaults.
+Changed empty script values still request clearing, and installer replacement
+still sends its explicit new file key.
+
 The public API documents no detached-upload deletion operation. Destroy deletes
 the Library Item and retains any underlying upload artifacts. A failed or
 ambiguous upload can leave an orphan; no automatic replay or cleanup is attempted.

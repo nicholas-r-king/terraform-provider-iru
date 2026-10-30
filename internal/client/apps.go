@@ -133,7 +133,15 @@ func (c *Client) CreateApp(ctx context.Context, input AppInput) (App, error) {
 	if err := input.Validate(); err != nil {
 		return App{}, err
 	}
-	data, err := c.requestEncoded(ctx, http.MethodPost, appsPath, []byte(input.form().Encode()), "application/x-www-form-urlencoded", http.StatusCreated)
+	form := input.form()
+	// Optional empty script/location fields are omitted at create. PATCH can
+	// still send changed empty values to request their removal explicitly.
+	for _, key := range []string{"audit_script", "preinstall_script", "postinstall_script", "unzip_location"} {
+		if form.Get(key) == "" {
+			form.Del(key)
+		}
+	}
+	data, err := c.requestEncoded(ctx, http.MethodPost, appsPath, []byte(form.Encode()), "application/x-www-form-urlencoded", http.StatusCreated)
 	if err != nil {
 		return App{}, err
 	}
@@ -155,14 +163,25 @@ func (c *Client) GetApp(ctx context.Context, id string) (App, error) {
 	return result, err
 }
 
-func (c *Client) UpdateApp(ctx context.Context, id string, input AppInput, replaceInstaller bool) (App, error) {
+func (c *Client) UpdateApp(ctx context.Context, id string, input AppInput, replaceInstaller bool, prior ...AppInput) (App, error) {
 	if !ValidID(id) {
 		return App{}, errors.New("Custom App ID must be a UUID")
 	}
 	if err := input.Validate(); err != nil {
 		return App{}, err
 	}
+	if len(prior) > 1 {
+		return App{}, errors.New("app update accepts at most one prior state")
+	}
 	form := input.form()
+	if len(prior) == 1 {
+		old := prior[0].form()
+		for key := range form {
+			if key != "name" && key != "file_key" && form.Get(key) == old.Get(key) {
+				form.Del(key)
+			}
+		}
+	}
 	if !replaceInstaller {
 		form.Del("file_key")
 	}
