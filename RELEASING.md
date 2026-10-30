@@ -110,6 +110,13 @@ with `copyright` or `license`. The generated tree also contains a `go.mod`
 boundary so normal `go test ./...`, `go vet ./...` and package discovery do not
 traverse it if reviewed source material is retained in the future. Git ignore
 rules alone do not provide that Go package boundary.
+That generated `go.mod` is local packaging infrastructure, not a required
+distributable legal notice. The archive configuration includes the root
+`release-legal/SOURCE.txt` explicitly and recursively includes the nested legal
+tree. The pinned glob matcher treats the slash after `**` literally, so a
+recursive pattern alone omits root files. License/source notice requirements
+remain mandatory; package jobs list up to 120 ZIP members before verification
+to make any path mismatch visible in CI.
 
 The release verifier checks all five SHA256 entries, protocol 6.0 manifest,
 safe ZIP paths, required legal/source material, exact source notice, provider

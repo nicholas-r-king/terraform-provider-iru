@@ -123,6 +123,10 @@ jobs:
           go run ./tools/release materials -tag "$GORELEASER_CURRENT_TAG" -commit "$GITHUB_SHA"
           goreleaser release --clean --skip=sign,publish,announce
           cp terraform-registry-manifest.json "dist/terraform-provider-iru_${GORELEASER_CURRENT_TAG#v}_manifest.json"
+          for archive in dist/*.zip; do
+            printf 'Archive members: %s\n' "$archive"
+            unzip -Z1 "$archive" | awk 'NR <= 120 { print } END { if (NR > 120) printf "... %d additional members\n", NR - 120 }'
+          done
           go run ./tools/release verify -tag "$GORELEASER_CURRENT_TAG" -commit "$GITHUB_SHA"
           printf 'Unsigned CI packaging rehearsal; not a release.\nFixture tag: %s\nExact tested source commit: %s\nNo signing or live Iru validation. The tag exists only in the disposable runner checkout.\n' "$GORELEASER_CURRENT_TAG" "$GITHUB_SHA" > dist/REHEARSAL.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -117,6 +117,10 @@ jobs:
           goreleaser check
           goreleaser release --clean --skip=sign,publish
           cp terraform-registry-manifest.json "dist/terraform-provider-iru_${RELEASE_TAG#v}_manifest.json"
+          for archive in dist/*.zip; do
+            printf 'Archive members: %s\n' "$archive"
+            unzip -Z1 "$archive" | awk 'NR <= 120 { print } END { if (NR > 120) printf "... %d additional members\n", NR - 120 }'
+          done
           go run ./tools/release verify -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
           mkdir -p .cache/first-build
           cp dist/*_SHA256SUMS .cache/first-build/

@@ -83,6 +83,21 @@ func TestPackageRehearsalCIIsUnsignedAndScopedToTheCurrentRun(t *testing.T) {
 	}
 }
 
+func TestReleaseArchiveExplicitlyIncludesRootSourceNotice(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", ".goreleaser.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	// The pinned fileglob matcher treats the slash after ** literally, so the
+	// recursive subtree pattern cannot supply root SOURCE.txt on its own.
+	for _, source := range []string{"release-legal/SOURCE.txt", "release-legal/**/*"} {
+		if !strings.Contains(config, "\n      - src: "+source+"\n") {
+			t.Fatalf("missing root source notice or nested legal tree: %s", source)
+		}
+	}
+}
+
 // A real trimmed Go executable exercises the metadata reader: linker flags are
 // absent from Go's build metadata when -trimpath is enabled. Never run the fixture.
 func TestTrimmedReleaseBinaryMetadata(t *testing.T) {
@@ -110,7 +125,7 @@ func TestTrimmedReleaseBinaryMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	sha := strings.Repeat("a", 40)
-	writePackage := func(version string) string {
+	writePackage := func(version, omit string) string {
 		t.Helper()
 		name := filepath.Join(dir, "synthetic-"+version+".zip")
 		file, err := os.Create(name)
@@ -121,11 +136,13 @@ func TestTrimmedReleaseBinaryMetadata(t *testing.T) {
 		for name, data := range map[string][]byte{
 			project + "_v" + version:   content,
 			"LICENSE":                  []byte("synthetic license"),
-			"release-legal/go.mod":     []byte(legalModuleBoundary),
 			"release-legal/SOURCE.txt": []byte("Source commit: " + sha + "\n"),
 			"release-legal/go/LICENSE": []byte("synthetic runtime notice"),
 			"release-legal/modules/github.com/hashicorp/terraform-plugin-framework@v1.19.0/LICENSE": []byte("synthetic framework notice"),
 		} {
+			if name == omit {
+				continue
+			}
 			header := &zip.FileHeader{Name: name, Method: zip.Deflate}
 			header.SetMode(0644)
 			if name == project+"_v"+version {
@@ -148,15 +165,19 @@ func TestTrimmedReleaseBinaryMetadata(t *testing.T) {
 		return name
 	}
 	target := runtime.GOOS + "_" + runtime.GOARCH
-	name := writePackage("0.1.0-alpha.1")
+	// The generated go.mod traversal boundary deliberately does not ship.
+	name := writePackage("0.1.0-alpha.1", "")
 	if err := verifyZIP(name, "0.1.0-alpha.1", sha, target); err != nil {
 		t.Fatal(err)
 	}
 	if verifyZIP(name, "0.1.0-alpha.1", sha, "unrelated_arch") == nil || verifyZIP(name, "0.1.0-alpha.1", strings.Repeat("b", 40), target) == nil {
 		t.Fatal("incorrect binary target or source notice accepted")
 	}
-	if verifyZIP(writePackage("0.2.0-alpha.1"), "0.2.0-alpha.1", sha, target) == nil {
+	if verifyZIP(writePackage("0.2.0-alpha.1", ""), "0.2.0-alpha.1", sha, target) == nil {
 		t.Fatal("incorrect embedded version marker accepted")
+	}
+	if err := verifyZIP(writePackage("0.1.0-alpha.1", "release-legal/SOURCE.txt"), "0.1.0-alpha.1", sha, target); err == nil || !strings.Contains(err.Error(), "release-legal/SOURCE.txt") {
+		t.Fatalf("missing source notice must still fail verification: %v", err)
 	}
 }
 

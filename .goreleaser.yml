@@ -31,8 +31,13 @@ archives:
         info:
           mode: 0644
           mtime: '2000-01-01T00:00:00Z'
+      # The pinned glob matcher requires a slash after **; list root notices
+      # explicitly and preserve the nested runtime/dependency legal tree.
+      - src: release-legal/SOURCE.txt
+        info:
+          mode: 0644
+          mtime: '2000-01-01T00:00:00Z'
       - src: release-legal/**/*
-        # Include the generated go.mod boundary along with notices/source links.
         info:
           mode: 0644
           mtime: '2000-01-01T00:00:00Z'

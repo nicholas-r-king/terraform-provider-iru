@@ -390,7 +390,9 @@ func verifyZIP(name, version, commit, target string) error {
 			return errors.New("unexpected archive payload")
 		}
 	}
-	for _, required := range []string{project + "_v" + version, "LICENSE", "release-legal/go.mod", "release-legal/SOURCE.txt", "release-legal/go/LICENSE", "release-legal/modules/github.com/hashicorp/terraform-plugin-framework@v1.19.0/LICENSE"} {
+	// release-legal/go.mod is a local Go traversal boundary, not a license or
+	// source-availability notice. Only distributable obligations belong here.
+	for _, required := range []string{project + "_v" + version, "LICENSE", "release-legal/SOURCE.txt", "release-legal/go/LICENSE", "release-legal/modules/github.com/hashicorp/terraform-plugin-framework@v1.19.0/LICENSE"} {
 		if !regular[required] {
 			return fmt.Errorf("archive is missing %s", required)
 		}
