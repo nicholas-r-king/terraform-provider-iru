@@ -41,6 +41,48 @@ func TestReleaseConfigurationCIHasNoSigningOrWriteAccess(t *testing.T) {
 	}
 }
 
+func TestPackageRehearsalCIIsUnsignedAndScopedToTheCurrentRun(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	for _, name := range []string{"package-rehearsal", "rehearsal-smoke"} {
+		pattern := regexp.MustCompile(`(?ms)^  ` + name + `:\n(.*?)(?:^  [A-Za-z0-9_-]+:\n|\z)`)
+		match := pattern.FindStringSubmatch(workflow)
+		if match == nil {
+			t.Fatalf("missing unsigned rehearsal job: %s", name)
+		}
+		job := match[1]
+		for _, forbidden := range []string{"secrets.", "contents: write", "environment:", "GPG_", "PASSPHRASE", "GITHUB_TOKEN", "GH_TOKEN", "git push", "gh release", "run-id:", "repository:", "github-token:"} {
+			if strings.Contains(job, forbidden) {
+				t.Fatalf("rehearsal must not acquire publishing access or cross-run artifacts: %s", forbidden)
+			}
+		}
+		for _, required := range []string{"permissions:\n      contents: read\n", "ref: ${{ github.sha }}", "persist-credentials: false"} {
+			if !strings.Contains(job, required) {
+				t.Fatalf("missing rehearsal isolation setting: %s", required)
+			}
+		}
+		for _, action := range regexp.MustCompile(`(?m)^\s+- uses:\s*(\S+)`).FindAllStringSubmatch(job, -1) {
+			if !regexp.MustCompile(`^[^@]+@[0-9a-f]{40}$`).MatchString(action[1]) {
+				t.Fatalf("rehearsal action is not immutable: %s", action[1])
+			}
+		}
+		var required []string
+		if name == "package-rehearsal" {
+			required = []string{"needs: [verify, release-config]", "GORELEASER_CURRENT_TAG: v0.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}", "name: ${{ steps.fixture.outputs.artifact }}", "version: v2.19.0", "install-only: true", `git tag "$GORELEASER_CURRENT_TAG" "$GITHUB_SHA"`, "goreleaser release --clean --skip=sign,publish,announce", "go run ./tools/release materials", "go run ./tools/release verify", "retention-days: 1", "dist/REHEARSAL.txt"}
+		} else {
+			required = []string{"needs: package-rehearsal", "GORELEASER_CURRENT_TAG: ${{ needs.package-rehearsal.outputs.tag }}", "name: ${{ needs.package-rehearsal.outputs.artifact }}", "os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]", "terraform_version: '1.17.0'", `go run ./tools/release smoke -tag "$GORELEASER_CURRENT_TAG" -commit "$GITHUB_SHA"`}
+		}
+		for _, setting := range required {
+			if !strings.Contains(job, setting) {
+				t.Fatalf("missing rehearsal gate: %s", setting)
+			}
+		}
+	}
+}
+
 // A real trimmed Go executable exercises the metadata reader: linker flags are
 // absent from Go's build metadata when -trimpath is enabled. Never run the fixture.
 func TestTrimmedReleaseBinaryMetadata(t *testing.T) {

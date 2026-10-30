@@ -24,6 +24,8 @@ by the Registry and cannot be installed from it.
    Require the normal **Release configuration** CI job to pass on that source:
    it runs GoReleaser v2.19.0 `check` on the exact tested SHA with read-only
    permissions and no signing secrets. It does not build or publish a release.
+   Also require **Unsigned package rehearsal** and all four **Native rehearsal
+   package** jobs to pass on that same source before considering release approval.
 2. Complete separately authorized isolated real-Iru validation before publication,
    covering the documented resource lifecycles, imports, no-op plans, refresh,
    permissions and safe cleanup. Record results without tenant data or credentials.
@@ -58,6 +60,25 @@ by the Registry and cannot be installed from it.
    of a draft, not public publication.
 
 ## What the workflow checks
+
+Normal PR/main CI first validates the release configuration and the five native
+provider jobs, then rehearses unsigned packaging with the actual GoReleaser
+configuration. Its `v0.0.0-ci.<run-id>.<attempt>` tag is a fixture created only in
+the disposable runner checkout at the exact tested `github.sha`; it is never
+pushed or registered as a release. `GORELEASER_CURRENT_TAG` is fixed to that
+fixture. This path deliberately bypasses the real release identity, merged-main
+and versioned-changelog gates because PR merge commits are valid rehearsal
+sources. Those gates remain mandatory in the separate manual release workflow.
+
+The rehearsal collects source/license material, builds all four platform ZIPs
+with `--skip=sign,publish,announce` and the configured release pipe disabled,
+copies the versioned protocol manifest, and verifies the archives/checksums.
+The unsigned artifact includes `REHEARSAL.txt` identifying its fixture version and
+exact source SHA, is retained for one day, and is consumed only within that
+workflow run. Four native Linux/macOS amd64/arm64 jobs install their respective
+ZIP offline and export its schema using Terraform 1.17.0. These read-only jobs
+have no signing/tenant secrets or publication permissions. Rehearsal success
+does not establish real-Iru compatibility or authorize a public release.
 
 All provider tests run without tenant secrets, on the requested source commit:
 Linux amd64 with Go 1.25.0 and 1.27.3, Linux arm64, macOS amd64, and macOS arm64
