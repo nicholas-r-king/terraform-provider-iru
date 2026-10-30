@@ -31,6 +31,10 @@ func managedValidationEndpoint(endpoint, collection string) bool {
 func validationFields(endpoint string) map[string]string {
 	var fields []string
 	switch {
+	case endpoint == appsPath+"/upload":
+		fields = []string{"name"}
+	case endpoint == inHouseAppsPath+"/upload":
+		fields = []string{"filename"}
 	case managedValidationEndpoint(endpoint, scriptsPath):
 		fields = []string{"name", "script", "remediation_script", "execution_frequency", "active", "restart", "show_in_self_service", "self_service_category_id", "self_service_recommended"}
 	case managedValidationEndpoint(endpoint, appsPath):

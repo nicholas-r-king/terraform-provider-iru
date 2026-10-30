@@ -11,13 +11,21 @@ description: |-
 
 {{ .Description | trimspace }}
 
-Complete the documented [Iru upload workflow](https://api-docs.iru.com/) first,
-then configure its `file_key`. This resource owns the Library Item only: it does
-not upload/hash local files, store presigned download/upload credentials, or
-delete detached S3 artifacts. Upload processing and orphan cleanup are outside
-its lifecycle. Metadata-only updates omit `file_key`; changing the key updates
-the installer reference. Reported `sha256` and `file_size` are null if the API
-omits them, and do not prove local artifact integrity.
+Configure an existing `file_key`, or set `source_file` and
+`source_sha256 = filesha256(...)` to use the documented
+[Iru upload workflow](https://api-docs.iru.com/). Local bytes are hashed before
+requesting an upload ticket and while streaming to S3. The Iru bearer token is
+never sent to S3, and signed upload credentials are not stored in state.
+Metadata-only updates retain the existing installer; changing the configured
+checksum uploads new bytes and replaces its reference in place.
+
+The public API documents no detached-upload deletion operation. Destroy deletes
+the Library Item and retains any underlying upload artifacts. A failed or
+ambiguous upload can leave an orphan; no automatic replay or cleanup is attempted.
+Reported `sha256` and `file_size` remain null when omitted by the API. A changed
+remote installer hash is drift. If Iru omits the hash but changes the file key,
+a managed local source is conservatively uploaded again rather than assuming
+that its bytes still match.
 
 Create/update are never automatically replayed, including HTTP 503 while an
 installer may be processing. After an ambiguous creation failure, inspect Iru
@@ -47,8 +55,10 @@ match the returned content for the first no-op plan.
 
 ## Import
 
-Import by Library Item UUID. Configure matching `file_key`, installation type
-and all nondefault settings before applying. Omitted defaults can deactivate an
+Import by Library Item UUID. Omit `file_key`, `source_file` and `source_sha256` to
+adopt the existing installer key, or configure a matching `file_key`. Local source
+paths cannot be recovered from Iru during import. Match installation type and
+all nondefault settings before applying. Omitted defaults can deactivate an
 imported app, clear scripts or change installation/Self Service settings. Matching
 configuration gives a no-op plan; import itself performs no write.
 

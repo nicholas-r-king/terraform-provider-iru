@@ -9,3 +9,12 @@ resource "iru_custom_app" "example" {
   active              = false
   restart             = false
 }
+
+# Alternative: upload a local installer. Replace the path with your package.
+resource "iru_custom_app" "local_installer" {
+  name          = "Local installer example"
+  source_file   = "./installers/example.pkg"
+  source_sha256 = filesha256("./installers/example.pkg")
+  install_type  = "package"
+  active        = false
+}

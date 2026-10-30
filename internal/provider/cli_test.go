@@ -45,7 +45,9 @@ func TestMain(m *testing.M) {
 	}
 	direct := &http.Transport{Proxy: nil}
 	transport := syntheticTransport(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Scheme != "https" || req.URL.Host != "synthetic.api.iru.com" || req.Header.Get("Authorization") != "Bearer "+cliToken {
+		api := req.URL.Host == "synthetic.api.iru.com" && req.Header.Get("Authorization") == "Bearer "+cliToken
+		upload := req.URL.Host == "synthetic-installer.s3.amazonaws.com" && req.URL.Path == "/" && req.URL.RawQuery == "" && req.Header.Get("Authorization") == "" && req.Header.Get("Cookie") == ""
+		if req.URL.Scheme != "https" || (!api && !upload) {
 			return nil, errors.New("test helper refuses nonsynthetic origin or credentials")
 		}
 		clone := req.Clone(req.Context())

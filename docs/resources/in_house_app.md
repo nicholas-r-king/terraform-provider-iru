@@ -8,9 +8,22 @@ description: |-
 
 # iru_in_house_app (Resource)
 
-Manages an In-House App Library Item referencing an already uploaded and validated IPA file_key. Does not upload installer bytes or manage assignments. Import by Library Item UUID.
+Manages an In-House App Library Item using a validated file_key or local IPA source_file/source_sha256. Local uploads must reach Iru's VALIDATED state before Library Item creation/update. Does not manage assignments or delete detached upload artifacts. Import by Library Item UUID.
 
-An existing validated IPA file key is required. Installer upload and deletion of detached upload artifacts are not managed. Configure all existing platform flags and active state before applying imported state.
+Use an existing validated `file_key`, or configure `source_file` with
+`source_sha256 = filesha256(...)`. Local bytes are verified before and during
+streaming to S3. The provider polls Iru's IPA upload status until `VALIDATED` and
+requires the returned key and checksum to match before writing a Library Item.
+Polling is bounded; failure or timeout does not trigger a Library Item write or
+an automatic upload retry. Signed S3 credentials are not persisted or logged.
+
+Metadata-only updates retain the installer. A changed source checksum replaces
+the installer in place. Destroy deletes the Library Item; detached upload
+artifacts remain because the documented API supplies no deletion operation.
+
+For import, omit both source settings and `file_key` to adopt the existing
+installer. Local paths cannot be reconstructed from Iru. Match the existing
+platform flags and active state before applying imported state.
 
 ## Example Usage
 
@@ -22,6 +35,14 @@ resource "iru_in_house_app" "example" {
   active         = false
   runs_on_iphone = true
 }
+
+resource "iru_in_house_app" "local_installer" {
+  name           = "Local IPA example"
+  source_file    = "./installers/example.ipa"
+  source_sha256  = filesha256("./installers/example.ipa")
+  active         = false
+  runs_on_iphone = true
+}
 ```
 
 
@@ -30,15 +51,17 @@ resource "iru_in_house_app" "example" {
 
 ### Required
 
-- `file_key` (String) Existing validated IPA upload key. Changing this replaces the installer in place.
 - `name` (String) Library Item name.
 
 ### Optional
 
 - `active` (Boolean) Activate the Library Item. Defaults to false.
+- `file_key` (String) Existing validated IPA key or the result of a local upload. Configure this or source_file at creation; omit both to adopt an imported key.
 - `runs_on_ipad` (Boolean) Target iPads.
 - `runs_on_iphone` (Boolean) Target iPhones. Explicitly select at least one platform.
 - `runs_on_tv` (Boolean) Target Apple TVs.
+- `source_file` (String) Local IPA path to upload and validate. Requires source_sha256; conflicts with a configured file_key.
+- `source_sha256` (String) Planned IPA SHA256; use filesha256(). Verified locally and against Iru's validated upload metadata.
 
 ### Read-Only
 
