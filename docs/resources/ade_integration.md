@@ -8,7 +8,7 @@ description: |-
 
 # iru_ade_integration (Resource)
 
-Manages an Apple Automated Device Enrollment integration and renewal of its Apple server token. Import by integration UUID. Creation and renewal require an Apple Business Manager token. Deleting an integration can affect device enrollment. Requires Terraform 1.11 or later for write-only token input.
+Manages an Apple Automated Device Enrollment integration and renewal of its Apple server token. Import by integration UUID. Creation and renewal require an Apple Business Manager token. Deletion is blocked because the Iru endpoint unassigns associated devices and the provider cannot verify a safe conditional deletion. Retain the remote integration when removing Terraform management. Requires Terraform 1.11 or later for write-only token input.
 
 The Apple token is write-only and is never stored in Terraform plan or state. Requires Terraform 1.11 or later. Change server_token_version to renew a token; changing token bytes alone cannot produce a plan difference. Import does not need a token and sets the local version to 0. Match existing metadata and leave the token version at 0 for the first no-change import plan. Deleting this integration affects enrollment; consider prevent_destroy for production.
 

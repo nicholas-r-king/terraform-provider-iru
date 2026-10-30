@@ -8,7 +8,7 @@ description: |-
 
 # iru_blueprint (Resource)
 
-Manages Blueprint metadata and manual enrollment settings. Can create empty classic/Assignment Map Blueprints or clone a documented source. Map nodes, parameters, Library Item assignments, and Blueprint routing rules are not managed. Import by UUID; match the existing type explicitly. Deletion permanently removes the Blueprint.
+Manages Blueprint metadata and manual enrollment settings. Can create empty classic/Assignment Map Blueprints or clone a documented source. Map nodes, parameters, Library Item assignments, and Blueprint routing rules are not managed. Import by UUID; match the existing type explicitly. Deletion and replacement are blocked: the Iru deletion endpoint unmanages all assigned devices and no atomic empty-Blueprint deletion contract has been verified. Remove Terraform management with a removed block using destroy=false when intentionally retaining the Blueprint.
 
 New Blueprints default to classic with manual enrollment disabled. The enrollment
 code is sensitive in displays and remains in Terraform state. Configure the
