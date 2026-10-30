@@ -1,0 +1,222 @@
+# SPDX-License-Identifier: MPL-2.0
+
+name: Prepare experimental release draft
+
+# No tag-push trigger. Enabling and dispatching this workflow are owner actions.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing experimental SemVer tag (for example v0.1.0-alpha.1)
+        required: true
+        type: string
+      commit:
+        description: Exact reviewed 40-character lowercase source commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experimental-release-draft
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+  CHECKPOINT_DISABLE: '1'
+  RELEASE_TAG: ${{ inputs.tag }}
+  RELEASE_COMMIT: ${{ inputs.commit }}
+
+jobs:
+  identity:
+    if: github.repository == 'nicholas-r-king/terraform-provider-iru' && github.ref == 'refs/heads/main' && vars.IRU_DRAFT_RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Require reviewed tag, exact commit and versioned changelog
+        run: go run ./tools/release identity -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+
+  verify:
+    needs: identity
+    name: Native checks / ${{ matrix.os }} / Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            go: '1.25.0'
+          - os: ubuntu-24.04
+            go: '1.27.3'
+          - os: ubuntu-24.04-arm
+            go: '1.27.3'
+          - os: macos-15-intel
+            go: '1.27.3'
+          - os: macos-15
+            go: '1.27.3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      - name: Require the same source commit
+        run: test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+      - name: Unit, Framework, mock CLI, vet, build, examples and docs
+        if: matrix.go != '1.25.0'
+        run: go run ./tools verify -check-docs
+      - name: Minimum provider Go version
+        if: matrix.go == '1.25.0'
+        run: go run ./tools verify
+      - name: Require a clean generated diff
+        run: git diff --exit-code
+
+  package:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Recheck the tag and prepare exact-source/license material
+        run: |
+          go run ./tools/release identity -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          go run ./tools/release materials -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.19.0
+          install-only: true
+      - name: Build and verify unsigned packages without release credentials
+        run: |
+          export GORELEASER_CURRENT_TAG="$RELEASE_TAG"
+          goreleaser check
+          goreleaser release --clean --skip=sign,publish
+          cp terraform-registry-manifest.json "dist/terraform-provider-iru_${RELEASE_TAG#v}_manifest.json"
+          for archive in dist/*.zip; do
+            printf 'Archive members: %s\n' "$archive"
+            unzip -Z1 "$archive" | awk 'NR <= 120 { print } END { if (NR > 120) printf "... %d additional members\n", NR - 120 }'
+          done
+          go run ./tools/release verify -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          mkdir -p .cache/first-build
+          cp dist/*_SHA256SUMS .cache/first-build/
+          goreleaser release --clean --skip=sign,publish
+          cp terraform-registry-manifest.json "dist/terraform-provider-iru_${RELEASE_TAG#v}_manifest.json"
+          go run ./tools/release verify -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          cmp .cache/first-build/*_SHA256SUMS dist/*_SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-release-${{ inputs.commit }}
+          path: |
+            dist/*.zip
+            dist/*_manifest.json
+            dist/*_SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  package-smoke:
+    needs: package
+    name: Native packaged provider / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned-release-${{ inputs.commit }}
+          path: dist
+      - name: Verify every checksum/package and install the native ZIP offline
+        run: go run ./tools/release smoke -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+
+  sign-draft:
+    needs: package-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Configure this environment with required reviewers before enabling dispatch.
+    # An absent signing setup fails before any release API write.
+    environment: registry-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned-release-${{ inputs.commit }}
+          path: dist
+      - name: Sign reviewed checksums and create an experimental draft only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          PASSPHRASE: ${{ secrets.PASSPHRASE }}
+          GPG_FINGERPRINT: ${{ vars.GPG_FINGERPRINT }}
+          RELEASE_SETUP: ${{ vars.IRU_RELEASE_SETUP }}
+        run: |
+          set -euo pipefail
+          test "$RELEASE_SETUP" = 'reviewers-and-signing-configured'
+          test -n "$GPG_PRIVATE_KEY"
+          test -n "$PASSPHRASE"
+          [[ "$GPG_FINGERPRINT" =~ ^([A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)" = "$RELEASE_COMMIT"
+          export GNUPGHOME
+          GNUPGHOME=$(mktemp -d)
+          chmod 700 "$GNUPGHOME"
+          trap 'gpgconf --kill gpg-agent; rm -rf -- "$GNUPGHOME"' EXIT
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          # Registry accepts RSA/DSA, not ECC. Require the selected primary
+          # key itself to sign, and force it with ! to avoid an ECC subkey.
+          signing_key=$(gpg --batch --with-colons --list-secret-keys --fingerprint "$GPG_FINGERPRINT" | awk -F: '
+            $1 == "sec" { algorithm = $4; capabilities = $12 }
+            $1 == "fpr" {
+              if ((algorithm == "1" || algorithm == "3" || algorithm == "17") && capabilities ~ /s/ && toupper($10) == toupper(ENVIRON["GPG_FINGERPRINT"])) print $10
+              algorithm = ""
+            }')
+          test "${signing_key^^}" = "${GPG_FINGERPRINT^^}"
+          sums="terraform-provider-iru_${RELEASE_TAG#v}_SHA256SUMS"
+          (cd dist && sha256sum --check "$sums")
+          printf '%s' "$PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 --local-user "${GPG_FINGERPRINT}!" --digest-algo SHA256 --no-armor --detach-sign --output "dist/$sums.sig" "dist/$sums"
+          gpg --batch --verify "dist/$sums.sig" "dist/$sums"
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          Experimental, unofficial Iru provider prerelease. Real Iru tenant compatibility has not been acceptance-tested. Native CI verifies synthetic unit/Framework/mock Terraform lifecycles and the packaged provider's offline installation/schema export only.
+
+          This draft requires source/license review, real tenant validation and a separate owner publication decision. See CHANGELOG.md and RELEASING.md at the tagged source commit. Keep the repository and exact source archives available after publication.
+          NOTES
+          gh release create "$RELEASE_TAG" dist/*.zip dist/*_manifest.json "dist/$sums" "dist/$sums.sig" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease --latest=false --title "$RELEASE_TAG (experimental)" --notes-file "$RUNNER_TEMP/release-notes.md"

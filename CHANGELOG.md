@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Public Registry release preparation: default-off manual experimental draft workflow, native package gates, signed checksums and source/license verification; no version or public visibility change is implied.
+- ADE integration Blueprint Routing support and read-only Blueprint-template/ADE public-key bootstrap helpers.
 - Avoid resending unchanged optional Script/App fields during PATCH; omit absent optional App content on creation while retaining explicit changed-content clearing.
 - Existing Device/ADE-device settings resources and exact-UUID metadata lookups using selective GET/PATCH, documented clearing, routing coupling, and management release without device deletion.
 - Directory-user UUID identity/status lookup with nullable reported fields and no deprecated IDs or directory internals.

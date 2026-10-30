@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MPL-2.0
+# Targets GoReleaser v2.19.0. See RELEASING.md before using this file.
+version: 2
+project_name: terraform-provider-iru
+
+builds:
+  - id: provider
+    main: .
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+      - -buildvcs=false
+      - -mod=readonly
+    ldflags:
+      - '-s -w -X main.version={{ .Version }}'
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: provider
+    ids: [provider]
+    formats: [zip]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    builds_info:
+      mtime: '2000-01-01T00:00:00Z'
+    files:
+      - src: LICENSE
+        info:
+          mode: 0644
+          mtime: '2000-01-01T00:00:00Z'
+      # The pinned glob matcher requires a slash after **; list root notices
+      # explicitly and preserve the nested runtime/dependency legal tree.
+      - src: release-legal/SOURCE.txt
+        info:
+          mode: 0644
+          mtime: '2000-01-01T00:00:00Z'
+      - src: release-legal/**/*
+        info:
+          mode: 0644
+          mtime: '2000-01-01T00:00:00Z'
+
+checksum:
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+  extra_files:
+    - glob: terraform-registry-manifest.json
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+
+# The workflow signs only the checked checksum file after all native gates pass.
+# No signing key is made available to GoReleaser or the build/test jobs.
+release:
+  # GitHub writes are owned exclusively by the gated sign-draft workflow job.
+  disable: 'true'
+  github:
+    owner: nicholas-r-king
+    name: terraform-provider-iru
+  draft: true
+  prerelease: 'true'
+  make_latest: 'false'
+  replace_existing_draft: false
+  replace_existing_artifacts: false
+  extra_files:
+    - glob: terraform-registry-manifest.json
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+
+changelog:
+  disable: true

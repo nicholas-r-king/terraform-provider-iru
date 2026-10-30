@@ -12,6 +12,8 @@ Manages an Apple Automated Device Enrollment integration and renewal of its Appl
 
 The Apple token is write-only and is never stored in Terraform plan or state. Requires Terraform 1.11 or later. Change server_token_version to renew a token; changing token bytes alone cannot produce a plan difference. Import does not need a token and sets the local version to 0. Match existing metadata and leave the token version at 0 for the first no-change import plan. Deleting this integration affects enrollment; consider prevent_destroy for production.
 
+Set either a default `blueprint_id`, or `use_blueprint_routing = true` with `blueprint_id` omitted. Both assignment choices are sent together for creation, renewal, and metadata updates. JSON uses an explicit null Blueprint for routing; multipart creation and renewal represent that null as an empty `blueprint_id` form field. Real API acceptance of this multipart encoding remains unverified. See the [ADE routing contract](../guides/ade-routing-contract.md) for supported getter shapes and limitations.
+
 ## Example Usage
 
 
@@ -31,7 +33,6 @@ resource "iru_ade_integration" "example" {
 
 ### Required
 
-- `blueprint_id` (String) Default Blueprint UUID for this integration.
 - `email` (String) Default enrollment contact email.
 - `phone` (String) Default enrollment contact phone.
 
@@ -39,8 +40,10 @@ resource "iru_ade_integration" "example" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
+- `blueprint_id` (String) Default Blueprint UUID. Required unless use_blueprint_routing=true; omit when using routing.
 - `server_token` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Base64-encoded Apple .p7m token; use filebase64 or an ephemeral value. Required at create and when server_token_version changes. Never stored in plan or state.
 - `server_token_version` (Number) Nonnegative local renewal trigger. Change this when supplying a new server_token; unchanged versions do not resend token bytes. Import defaults to 0. The version is local bookkeeping, not remotely detectable token drift.
+- `use_blueprint_routing` (Boolean) Use Blueprint Routing for enrollment. Defaults to false; true requires blueprint_id to be omitted. Set both assignment choices to match the integration before importing.
 
 ### Read-Only
 

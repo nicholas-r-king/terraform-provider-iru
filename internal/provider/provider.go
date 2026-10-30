@@ -84,5 +84,5 @@ func (*IruProvider) Resources(context.Context) []func() resource.Resource {
 }
 
 func (*IruProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewBlueprintDataSource, NewLibraryItemDataSource, NewInventoryDataSource, NewBlueprintRoutingDataSource, NewDeviceDataSource, NewADEDeviceDataSource, NewUserDataSource}
+	return []func() datasource.DataSource{NewBlueprintDataSource, NewLibraryItemDataSource, NewInventoryDataSource, NewBlueprintRoutingDataSource, NewDeviceDataSource, NewADEDeviceDataSource, NewUserDataSource, NewBlueprintTemplatesDataSource, NewADEPublicKeyDataSource}
 }

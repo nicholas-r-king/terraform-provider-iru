@@ -16,6 +16,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-config:
+    name: Release configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.19.0
+          install-only: true
+      - name: Validate release configuration without building or publishing
+        run: goreleaser check
+
   verify:
     name: ${{ matrix.os }} / Go ${{ matrix.go }} / Terraform ${{ matrix.terraform }}
     runs-on: ${{ matrix.os }}
@@ -62,3 +80,98 @@ jobs:
         run: go run ./tools verify
       - name: Require a clean generated diff
         run: git diff --exit-code
+
+  package-rehearsal:
+    name: Unsigned package rehearsal
+    needs: [verify, release-config]
+    outputs:
+      tag: ${{ steps.fixture.outputs.tag }}
+      artifact: ${{ steps.fixture.outputs.artifact }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      GOTOOLCHAIN: local
+      CHECKPOINT_DISABLE: '1'
+      # A unique fixture tag exists only in this disposable runner checkout.
+      GORELEASER_CURRENT_TAG: v0.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind fixture identity for same-run consumers and partial reruns
+        id: fixture
+        shell: bash
+        run: printf 'tag=%s\nartifact=unsigned-package-rehearsal-%s-%s\n' "$GORELEASER_CURRENT_TAG" "$GITHUB_SHA" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.19.0
+          install-only: true
+      - name: Build and verify unsigned fixture archives on the tested source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git tag "$GORELEASER_CURRENT_TAG" "$GITHUB_SHA"
+          go run ./tools/release materials -tag "$GORELEASER_CURRENT_TAG" -commit "$GITHUB_SHA"
+          goreleaser release --clean --skip=sign,publish,announce
+          cp terraform-registry-manifest.json "dist/terraform-provider-iru_${GORELEASER_CURRENT_TAG#v}_manifest.json"
+          for archive in dist/*.zip; do
+            printf 'Archive members: %s\n' "$archive"
+            unzip -Z1 "$archive" | awk 'NR <= 120 { print } END { if (NR > 120) printf "... %d additional members\n", NR - 120 }'
+          done
+          go run ./tools/release verify -tag "$GORELEASER_CURRENT_TAG" -commit "$GITHUB_SHA"
+          printf 'Unsigned CI packaging rehearsal; not a release.\nFixture tag: %s\nExact tested source commit: %s\nNo signing or live Iru validation. The tag exists only in the disposable runner checkout.\n' "$GORELEASER_CURRENT_TAG" "$GITHUB_SHA" > dist/REHEARSAL.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.fixture.outputs.artifact }}
+          path: |
+            dist/*.zip
+            dist/*_manifest.json
+            dist/*_SHA256SUMS
+            dist/REHEARSAL.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  rehearsal-smoke:
+    name: Native rehearsal package / ${{ matrix.os }}
+    needs: package-rehearsal
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    env:
+      GOTOOLCHAIN: local
+      CHECKPOINT_DISABLE: '1'
+      GORELEASER_CURRENT_TAG: ${{ needs.package-rehearsal.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      # With no run-id/repository/token overrides, download is from this run only.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.package-rehearsal.outputs.artifact }}
+          path: dist
+      - name: Verify four archives and install the native fixture ZIP offline
+        run: go run ./tools/release smoke -tag "$GORELEASER_CURRENT_TAG" -commit "$GITHUB_SHA"

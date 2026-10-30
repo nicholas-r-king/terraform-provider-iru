@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -20,14 +21,15 @@ import (
 
 type ADEIntegrationResource struct{ client *client.Client }
 type adeModel struct {
-	ID                 types.String `tfsdk:"id"`
-	BlueprintID        types.String `tfsdk:"blueprint_id"`
-	Email              types.String `tfsdk:"email"`
-	Phone              types.String `tfsdk:"phone"`
-	ServerToken        types.String `tfsdk:"server_token"`
-	ServerTokenVersion types.Int64  `tfsdk:"server_token_version"`
-	ServerName         types.String `tfsdk:"server_name"`
-	AccessTokenExpiry  types.String `tfsdk:"access_token_expiry"`
+	ID                  types.String `tfsdk:"id"`
+	BlueprintID         types.String `tfsdk:"blueprint_id"`
+	UseBlueprintRouting types.Bool   `tfsdk:"use_blueprint_routing"`
+	Email               types.String `tfsdk:"email"`
+	Phone               types.String `tfsdk:"phone"`
+	ServerToken         types.String `tfsdk:"server_token"`
+	ServerTokenVersion  types.Int64  `tfsdk:"server_token_version"`
+	ServerName          types.String `tfsdk:"server_name"`
+	AccessTokenExpiry   types.String `tfsdk:"access_token_expiry"`
 }
 
 var (
@@ -43,14 +45,15 @@ func (*ADEIntegrationResource) Metadata(_ context.Context, req resource.Metadata
 }
 func (*ADEIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{MarkdownDescription: "Manages an Apple Automated Device Enrollment integration and renewal of its Apple server token. Import by integration UUID. Creation and renewal require an Apple Business Manager token. Deleting an integration can affect device enrollment. Requires Terraform 1.11 or later for write-only token input.", Attributes: map[string]schema.Attribute{
-		"id":                   schema.StringAttribute{Computed: true, MarkdownDescription: "ADE integration UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-		"blueprint_id":         schema.StringAttribute{Required: true, MarkdownDescription: "Default Blueprint UUID for this integration."},
-		"email":                schema.StringAttribute{Required: true, MarkdownDescription: "Default enrollment contact email."},
-		"phone":                schema.StringAttribute{Required: true, MarkdownDescription: "Default enrollment contact phone."},
-		"server_token":         schema.StringAttribute{Optional: true, WriteOnly: true, Sensitive: true, MarkdownDescription: "Base64-encoded Apple .p7m token; use filebase64 or an ephemeral value. Required at create and when server_token_version changes. Never stored in plan or state."},
-		"server_token_version": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Nonnegative local renewal trigger. Change this when supplying a new server_token; unchanged versions do not resend token bytes. Import defaults to 0. The version is local bookkeeping, not remotely detectable token drift."},
-		"server_name":          schema.StringAttribute{Computed: true, MarkdownDescription: "Apple server name returned by Iru."},
-		"access_token_expiry":  schema.StringAttribute{Computed: true, MarkdownDescription: "Token expiration timestamp returned by Iru."},
+		"id":                    schema.StringAttribute{Computed: true, MarkdownDescription: "ADE integration UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
+		"blueprint_id":          schema.StringAttribute{Optional: true, MarkdownDescription: "Default Blueprint UUID. Required unless use_blueprint_routing=true; omit when using routing."},
+		"use_blueprint_routing": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Use Blueprint Routing for enrollment. Defaults to false; true requires blueprint_id to be omitted. Set both assignment choices to match the integration before importing."},
+		"email":                 schema.StringAttribute{Required: true, MarkdownDescription: "Default enrollment contact email."},
+		"phone":                 schema.StringAttribute{Required: true, MarkdownDescription: "Default enrollment contact phone."},
+		"server_token":          schema.StringAttribute{Optional: true, WriteOnly: true, Sensitive: true, MarkdownDescription: "Base64-encoded Apple .p7m token; use filebase64 or an ephemeral value. Required at create and when server_token_version changes. Never stored in plan or state."},
+		"server_token_version":  schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Nonnegative local renewal trigger. Change this when supplying a new server_token; unchanged versions do not resend token bytes. Import defaults to 0. The version is local bookkeeping, not remotely detectable token drift."},
+		"server_name":           schema.StringAttribute{Computed: true, MarkdownDescription: "Apple server name returned by Iru."},
+		"access_token_expiry":   schema.StringAttribute{Computed: true, MarkdownDescription: "Token expiration timestamp returned by Iru."},
 	}}
 }
 func (r *ADEIntegrationResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -65,7 +68,7 @@ func (r *ADEIntegrationResource) Configure(_ context.Context, req resource.Confi
 	r.client = c
 }
 func (data adeModel) input() client.ADEInput {
-	return client.ADEInput{BlueprintID: data.BlueprintID.ValueString(), Email: data.Email.ValueString(), Phone: data.Phone.ValueString()}
+	return client.ADEInput{BlueprintID: data.BlueprintID.ValueString(), UseBlueprintRouting: data.UseBlueprintRouting.ValueBool(), Email: data.Email.ValueString(), Phone: data.Phone.ValueString()}
 }
 func decodeServerToken(value types.String) ([]byte, error) {
 	if value.IsNull() || value.IsUnknown() || len(value.ValueString()) > base64.StdEncoding.EncodedLen(1024*1024) {
@@ -91,7 +94,11 @@ func (*ADEIntegrationResource) ValidateConfig(ctx context.Context, req resource.
 			resp.Diagnostics.AddAttributeError(path.Root("server_token"), "Invalid Apple server token", err.Error())
 		}
 	}
-	if data.BlueprintID.IsUnknown() || data.Email.IsUnknown() || data.Phone.IsUnknown() {
+	if data.BlueprintID.IsUnknown() || data.UseBlueprintRouting.IsUnknown() || data.Email.IsUnknown() || data.Phone.IsUnknown() {
+		return
+	}
+	if data.UseBlueprintRouting.ValueBool() && !data.BlueprintID.IsNull() {
+		resp.Diagnostics.AddAttributeError(path.Root("blueprint_id"), "Conflicting ADE enrollment assignment", "Omit blueprint_id when use_blueprint_routing is true; an empty configured string is not an omitted Blueprint.")
 		return
 	}
 	if err := data.input().Validate(); err != nil {
@@ -100,9 +107,12 @@ func (*ADEIntegrationResource) ValidateConfig(ctx context.Context, req resource.
 }
 func adeState(value client.ADEIntegration, prior adeModel) adeModel {
 	prior.ID = types.StringValue(value.ID)
-	if !strings.EqualFold(prior.BlueprintID.ValueString(), value.Blueprint.ID) {
-		prior.BlueprintID = types.StringValue(value.Blueprint.ID)
+	if value.BlueprintID == nil {
+		prior.BlueprintID = types.StringNull()
+	} else if !strings.EqualFold(prior.BlueprintID.ValueString(), *value.BlueprintID) {
+		prior.BlueprintID = types.StringValue(*value.BlueprintID)
 	}
+	prior.UseBlueprintRouting = types.BoolValue(value.UseBlueprintRouting)
 	prior.Email, prior.Phone = types.StringValue(*value.Defaults.Email), types.StringValue(*value.Defaults.Phone)
 	prior.ServerName, prior.AccessTokenExpiry, prior.ServerToken = types.StringValue(value.ServerName), types.StringValue(value.AccessTokenExpiry), types.StringNull()
 	if prior.ServerTokenVersion.IsNull() {
@@ -111,7 +121,7 @@ func adeState(value client.ADEIntegration, prior adeModel) adeModel {
 	return prior
 }
 func (data adeModel) unknownInput() bool {
-	return data.BlueprintID.IsUnknown() || data.Email.IsUnknown() || data.Phone.IsUnknown() || data.ServerTokenVersion.IsUnknown()
+	return data.BlueprintID.IsUnknown() || data.UseBlueprintRouting.IsUnknown() || data.Email.IsUnknown() || data.Phone.IsUnknown() || data.ServerTokenVersion.IsUnknown()
 }
 func (r *ADEIntegrationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data adeModel

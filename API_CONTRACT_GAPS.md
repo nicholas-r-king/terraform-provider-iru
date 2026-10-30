@@ -61,6 +61,13 @@ whether omission of the override property means unsupported, unassigned or
 temporarily unavailable. Until then, override management requires an explicit
 reported field, and undocumented ADE null-clearing is refused.
 
+ADE integrations separately document Blueprint Routing assignment and now have
+that input/state support. The collection's saved responses and multipart bodies
+remain fixed-Blueprint examples. The provider accepts explicit documented
+routing response fields and legacy nested fixed-Blueprint metadata, and encodes
+multipart null selection as an empty field plus an explicit routing flag. Real
+create/renew/import acceptance of those representations still needs verification.
+
 ## Detached installer artifacts
 
 Custom App and IPA upload/validation workflows are documented, but detached

@@ -4,6 +4,8 @@
 /terraform-provider-iru
 /.tools/
 /.cache/
+/dist/
+/release-legal/
 /.terraform/
 *.tfstate
 *.tfstate.*

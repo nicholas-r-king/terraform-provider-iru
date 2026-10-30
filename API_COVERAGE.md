@@ -14,9 +14,11 @@ in [API contract gaps](API_CONTRACT_GAPS.md).
 | Custom Profile | CRUD | Resource; import and drift handling; live lifecycle unverified |
 | Custom App | CRUD, upload | Existing file key or checksum-verified streaming local upload; live lifecycle unverified |
 | Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
+| Blueprint template catalog | Read only; grouped positive integer IDs | Bounded catalog lookup projects IDs/names/categories for source_type=template cloning; parameters are not made writable |
 | Tag | CRUD; read via paginated list | Resource; import, drift and disappearance handling |
 | In-House App | CRUD, upload and upload status | Existing key or local streaming upload with bounded IPA validation; live lifecycle unverified |
-| ADE integration | CRUD and token renewal | Resource with write-only token input and local renewal version; live create/renew needs an Apple server token |
+| ADE integration | CRUD, token renewal, Blueprint/routing assignment | Resource with write-only token input and local renewal version; documented routing/Blueprint choices supported; multipart/response routing details remain live-unverified |
+| ADE public key | Read-only ABM bootstrap PEM | Public-only certificate/key lookup with exact-response SHA256; no private material or trust-chain assertion |
 | Device Note | CRUD | Resource with composite UUID import; live validation needs a selected disposable device |
 | Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |
 | Blueprint routing | Read and update enrollment settings | Settings resource and sensitive lookup; matching adoption/import is read-only, destroy relinquishes management; live validation pending. Routing rule editing is not documented |
