@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.1
+
+Experimental preview. Real Iru tenant compatibility has not been acceptance-tested.
+Synthetic tests and native package installation/schema checks cover Linux and macOS
+on amd64/arm64 with Terraform 1.17.0. Windows is not a release target.
+
 - Public Registry release preparation: default-off manual experimental draft workflow, native package gates, signed checksums and source/license verification; no version or public visibility change is implied.
 - ADE integration Blueprint Routing support and read-only Blueprint-template/ADE public-key bootstrap helpers.
 - Avoid resending unchanged optional Script/App fields during PATCH; omit absent optional App content on creation while retaining explicit changed-content clearing.
