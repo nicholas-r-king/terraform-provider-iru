@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Blueprint routing singleton enrollment settings and sensitive lookup using the documented GET/PATCH contract; destroy releases management without changing tenant settings.
 - Streaming Custom App and In-House App installer uploads from planned SHA256-verified local files, with token separation and bounded IPA status validation.
 - Installer content drift repair, metadata-only upload avoidance, and import adoption of existing installer keys.
 - Blueprint metadata/enrollment and Tag CRUD/import resources with bounded refresh.

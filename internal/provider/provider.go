@@ -80,9 +80,9 @@ func (p *IruProvider) Configure(ctx context.Context, req provider.ConfigureReque
 }
 
 func (*IruProvider) Resources(context.Context) []func() resource.Resource {
-	return []func() resource.Resource{NewCustomScriptResource, NewCustomAppResource, NewCustomProfileResource, NewBlueprintResource, NewTagResource, NewInHouseAppResource, NewADEIntegrationResource, NewDeviceNoteResource}
+	return []func() resource.Resource{NewCustomScriptResource, NewCustomAppResource, NewCustomProfileResource, NewBlueprintResource, NewTagResource, NewInHouseAppResource, NewADEIntegrationResource, NewDeviceNoteResource, NewBlueprintRoutingResource}
 }
 
 func (*IruProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewBlueprintDataSource, NewLibraryItemDataSource, NewInventoryDataSource}
+	return []func() datasource.DataSource{NewBlueprintDataSource, NewLibraryItemDataSource, NewInventoryDataSource, NewBlueprintRoutingDataSource}
 }

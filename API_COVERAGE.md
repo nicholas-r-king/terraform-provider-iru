@@ -17,7 +17,7 @@ a particular tenant or token. Synthetic tests and live acceptance are separate.
 | ADE integration | CRUD and token renewal | Resource with write-only token input and local renewal version; live create/renew needs an Apple server token |
 | Device Note | CRUD | Resource with composite UUID import; live validation needs a selected disposable device |
 | Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |
-| Blueprint routing | Read and update enrollment settings | Pending; routing rule editing is not documented |
+| Blueprint routing | Read and update enrollment settings | Settings resource and sensitive lookup; matching adoption/import is read-only, destroy relinquishes management; live validation pending. Routing rule editing is not documented |
 | Device/ADE device metadata | Read and PATCH selected fields | Pending; enrollment is external, so full object CRUD is unavailable |
 | Self Service category | List only | ID/name lookup through configuration inventory; no documented create/update/delete |
 | Directory user | Read/delete only | Lookup pending; creation/update belongs to the directory integration |

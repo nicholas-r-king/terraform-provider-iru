@@ -1,0 +1,1 @@
+terraform import iru_blueprint_routing.example tenant
