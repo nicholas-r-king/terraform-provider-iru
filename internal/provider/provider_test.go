@@ -85,10 +85,10 @@ func TestProtocolSchemaAndSensitiveAttributes(t *testing.T) {
 			t.Fatalf("schema error: %s", d.Detail)
 		}
 	}
-	if len(resp.ResourceSchemas) != 8 || resp.ResourceSchemas["iru_custom_script"] == nil || resp.ResourceSchemas["iru_custom_app"] == nil || resp.ResourceSchemas["iru_custom_profile"] == nil || resp.ResourceSchemas["iru_blueprint"] == nil || resp.ResourceSchemas["iru_tag"] == nil || resp.ResourceSchemas["iru_in_house_app"] == nil || resp.ResourceSchemas["iru_ade_integration"] == nil || resp.ResourceSchemas["iru_device_note"] == nil {
+	if len(resp.ResourceSchemas) != 9 || resp.ResourceSchemas["iru_custom_script"] == nil || resp.ResourceSchemas["iru_custom_app"] == nil || resp.ResourceSchemas["iru_custom_profile"] == nil || resp.ResourceSchemas["iru_blueprint"] == nil || resp.ResourceSchemas["iru_tag"] == nil || resp.ResourceSchemas["iru_in_house_app"] == nil || resp.ResourceSchemas["iru_ade_integration"] == nil || resp.ResourceSchemas["iru_device_note"] == nil || resp.ResourceSchemas["iru_blueprint_routing"] == nil {
 		t.Fatal("unexpected registered resources")
 	}
-	if len(resp.DataSourceSchemas) != 3 || resp.DataSourceSchemas["iru_blueprint"] == nil || resp.DataSourceSchemas["iru_library_item"] == nil || resp.DataSourceSchemas["iru_inventory"] == nil {
+	if len(resp.DataSourceSchemas) != 4 || resp.DataSourceSchemas["iru_blueprint"] == nil || resp.DataSourceSchemas["iru_library_item"] == nil || resp.DataSourceSchemas["iru_inventory"] == nil || resp.DataSourceSchemas["iru_blueprint_routing"] == nil {
 		t.Fatal("unexpected registered lookup data sources")
 	}
 	var schemaResp fwprovider.SchemaResponse

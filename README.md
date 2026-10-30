@@ -13,6 +13,10 @@ managed. The `iru_inventory` data source lists UUID/name metadata for eight
 configuration object families, including Self Service categories.
 See [API coverage](API_COVERAGE.md) for the remaining API gaps.
 
+`iru_blueprint_routing` also manages or reads tenant-wide manual enrollment
+settings. This singleton has GET/PATCH only: matching adoption/import is
+read-only, and destroy leaves Iru settings intact while releasing management.
+
 This is a development provider. Real Iru compatibility has not been
 acceptance-tested. CI checks synthetic unit, Framework and Terraform CLI behavior
 on Linux and macOS; check the commit's results before using a build. No Registry
