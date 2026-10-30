@@ -18,9 +18,9 @@ a particular tenant or token. Synthetic tests and live acceptance are separate.
 | Device Note | CRUD | Resource with composite UUID import; live validation needs a selected disposable device |
 | Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |
 | Blueprint routing | Read and update enrollment settings | Settings resource and sensitive lookup; matching adoption/import is read-only, destroy relinquishes management; live validation pending. Routing rule editing is not documented |
-| Device/ADE device metadata | Read and PATCH selected fields | Pending; enrollment is external, so full object CRUD is unavailable |
+| Device/ADE device metadata | Read and PATCH selected fields | Settings resources and exact-UUID lookups. Unconfigured fields stay unmanaged; destroy releases management without deleting devices. ADE override management requires getter support; undocumented ADE null-clearing remains a contract gap. Live validation pending |
 | Self Service category | List only | ID/name lookup through configuration inventory; no documented create/update/delete |
-| Directory user | Read/delete only | Lookup pending; creation/update belongs to the directory integration |
+| Directory user | Read/delete only | Exact-UUID identity/status lookup. Creation/update belongs to the directory integration; no destructive user lifecycle resource is invented |
 | Device inventory, activity, status, licensing, audit, vulnerability data | Read-oriented API | Reporting scope; does not provide configuration CRUD |
 | Device commands | One-shot operational actions | Not configuration resources; enrollment/deletion/erase are not CRUD equivalents |
 | Other built-in Library Item types, Assignment Map conditions and parameters | No public CRUD contract in this collection | API limitation; no undocumented UI endpoints are used |
