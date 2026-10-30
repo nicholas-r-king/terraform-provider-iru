@@ -9,15 +9,23 @@ description: |-
 
 # iru_custom_app (Resource)
 
-Manages one Custom App Library Item referencing an existing uploaded installer file_key. Does not upload or delete S3 artifacts, expose signed URLs, or manage assignments. Import by Library Item UUID.
+Manages one Custom App Library Item using an existing file_key or a local source_file/source_sha256 upload. Does not delete detached S3 artifacts, expose signed URLs, or manage assignments. Import by Library Item UUID.
 
-Complete the documented [Iru upload workflow](https://api-docs.iru.com/) first,
-then configure its `file_key`. This resource owns the Library Item only: it does
-not upload/hash local files, store presigned download/upload credentials, or
-delete detached S3 artifacts. Upload processing and orphan cleanup are outside
-its lifecycle. Metadata-only updates omit `file_key`; changing the key updates
-the installer reference. Reported `sha256` and `file_size` are null if the API
-omits them, and do not prove local artifact integrity.
+Configure an existing `file_key`, or set `source_file` and
+`source_sha256 = filesha256(...)` to use the documented
+[Iru upload workflow](https://api-docs.iru.com/). Local bytes are hashed before
+requesting an upload ticket and while streaming to S3. The Iru bearer token is
+never sent to S3, and signed upload credentials are not stored in state.
+Metadata-only updates retain the existing installer; changing the configured
+checksum uploads new bytes and replaces its reference in place.
+
+The public API documents no detached-upload deletion operation. Destroy deletes
+the Library Item and retains any underlying upload artifacts. A failed or
+ambiguous upload can leave an orphan; no automatic replay or cleanup is attempted.
+Reported `sha256` and `file_size` remain null when omitted by the API. A changed
+remote installer hash is drift. If Iru omits the hash but changes the file key,
+a managed local source is conservatively uploaded again rather than assuming
+that its bytes still match.
 
 Create/update are never automatically replayed, including HTTP 503 while an
 installer may be processing. After an ambiguous creation failure, inspect Iru
@@ -52,6 +60,15 @@ resource "iru_custom_app" "example" {
   active              = false
   restart             = false
 }
+
+# Alternative: upload a local installer. Replace the path with your package.
+resource "iru_custom_app" "local_installer" {
+  name          = "Local installer example"
+  source_file   = "./installers/example.pkg"
+  source_sha256 = filesha256("./installers/example.pkg")
+  install_type  = "package"
+  active        = false
+}
 ```
 
 
@@ -60,7 +77,6 @@ resource "iru_custom_app" "example" {
 
 ### Required
 
-- `file_key` (String) Existing installer key from the documented Iru upload workflow. Upload must have completed. Not a URL or local path.
 - `install_type` (String) package, zip, or image. zip requires unzip_location.
 - `name` (String) Display name.
 
@@ -68,6 +84,7 @@ resource "iru_custom_app" "example" {
 
 - `active` (Boolean) Whether the item is active and installable. Defaults to false.
 - `audit_script` (String, Sensitive) Audit script for continuously_enforce only. Content remains in state.
+- `file_key` (String) Existing uploaded installer key, or the result of a source_file upload. Configure either this or source_file at creation. Omit both to adopt an imported item's key.
 - `install_enforcement` (String) install_once, continuously_enforce, or no_enforcement. Continuous enforcement requires audit_script; no enforcement requires Self Service and a category.
 - `postinstall_script` (String, Sensitive) Postinstall script; empty string clears it. Content remains in state.
 - `preinstall_script` (String, Sensitive) Preinstall script; empty string clears it. Content remains in state.
@@ -75,18 +92,22 @@ resource "iru_custom_app" "example" {
 - `self_service_category_id` (String) Existing category UUID, managed only while Self Service is enabled.
 - `self_service_recommended` (Boolean) Recommend in Self Service; requires Self Service.
 - `show_in_self_service` (Boolean) Display in Self Service; requires an existing category UUID.
+- `source_file` (String) Local installer path to stream through the documented Iru/S3 upload workflow. Requires source_sha256 and conflicts with a configured file_key. Changing only the path without changing bytes does not upload again.
+- `source_sha256` (String) Planned SHA256 of source_file; use filesha256(). Verified before and during upload. Changed bytes upload a new installer in place; metadata updates retain the existing key.
 - `unzip_location` (String) Extraction destination required for zip installers.
 
 ### Read-Only
 
 - `file_size` (Number) Installer size reported by Iru, or null when absent.
 - `id` (String) Library Item UUID.
-- `sha256` (String) Installer SHA256 reported by Iru, or null when absent. Never inferred from file_key. This provider does not hash or verify local installer bytes.
+- `sha256` (String) Installer SHA256 reported by Iru, or null when absent. Never inferred from file_key.
 
 ## Import
 
-Import by Library Item UUID. Configure matching `file_key`, installation type
-and all nondefault settings before applying. Omitted defaults can deactivate an
+Import by Library Item UUID. Omit `file_key`, `source_file` and `source_sha256` to
+adopt the existing installer key, or configure a matching `file_key`. Local source
+paths cannot be recovered from Iru during import. Match installation type and
+all nondefault settings before applying. Omitted defaults can deactivate an
 imported app, clear scripts or change installation/Self Service settings. Matching
 configuration gives a no-op plan; import itself performs no write.
 

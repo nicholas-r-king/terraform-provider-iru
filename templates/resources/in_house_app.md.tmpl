@@ -10,7 +10,20 @@ description: |-
 
 {{ .Description | trimspace }}
 
-An existing validated IPA file key is required. Installer upload and deletion of detached upload artifacts are not managed. Configure all existing platform flags and active state before applying imported state.
+Use an existing validated `file_key`, or configure `source_file` with
+`source_sha256 = filesha256(...)`. Local bytes are verified before and during
+streaming to S3. The provider polls Iru's IPA upload status until `VALIDATED` and
+requires the returned key and checksum to match before writing a Library Item.
+Polling is bounded; failure or timeout does not trigger a Library Item write or
+an automatic upload retry. Signed S3 credentials are not persisted or logged.
+
+Metadata-only updates retain the installer. A changed source checksum replaces
+the installer in place. Destroy deletes the Library Item; detached upload
+artifacts remain because the documented API supplies no deletion operation.
+
+For import, omit both source settings and `file_key` to adopt the existing
+installer. Local paths cannot be reconstructed from Iru. Match the existing
+platform flags and active state before applying imported state.
 
 ## Example Usage
 

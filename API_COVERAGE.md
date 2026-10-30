@@ -10,10 +10,10 @@ a particular tenant or token. Synthetic tests and live acceptance are separate.
 | --- | --- | --- |
 | Custom Script | CRUD | Resource; import and drift handling; live lifecycle unverified |
 | Custom Profile | CRUD | Resource; import and drift handling; live lifecycle unverified |
-| Custom App | CRUD, upload | Resource with existing file key; upload automation incomplete |
+| Custom App | CRUD, upload | Existing file key or checksum-verified streaming local upload; live lifecycle unverified |
 | Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
 | Tag | CRUD; read via paginated list | Resource; import, drift and disappearance handling |
-| In-House App | CRUD, upload and upload status | Resource with validated file key; upload automation incomplete; live lifecycle unverified |
+| In-House App | CRUD, upload and upload status | Existing key or local streaming upload with bounded IPA validation; live lifecycle unverified |
 | ADE integration | CRUD and token renewal | Resource with write-only token input and local renewal version; live create/renew needs an Apple server token |
 | Device Note | CRUD | Resource with composite UUID import; live validation needs a selected disposable device |
 | Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |

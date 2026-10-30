@@ -4,9 +4,9 @@
 
 An unofficial development provider for Iru device management, built with the
 HashiCorp Terraform Plugin Framework. Resources include `iru_custom_script` and
-`iru_custom_app` (using an existing uploaded installer key), and `iru_custom_profile`.
+`iru_custom_app` (using an uploaded key or local installer), and `iru_custom_profile`.
 It also manages `iru_blueprint` metadata/enrollment settings, `iru_tag`,
-`iru_in_house_app` (using a validated IPA upload key), `iru_ade_integration`
+`iru_in_house_app` (using a validated key or local IPA), `iru_ade_integration`
 (including Apple token renewal), and `iru_device_note`.
 Assignment Map nodes, parameters, and Library Item/device assignments are not
 managed. The `iru_inventory` data source lists UUID/name metadata for eight

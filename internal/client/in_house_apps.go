@@ -24,6 +24,8 @@ type InHouseAppInput struct {
 type InHouseApp struct {
 	ID string `json:"id"`
 	InHouseAppInput
+	SHA256   *string `json:"sha256,omitempty"`
+	FileSize *int64  `json:"file_size,omitempty"`
 }
 
 func (input InHouseAppInput) Validate() error {
@@ -50,6 +52,16 @@ func decodeInHouseApp(data []byte, expected string) (InHouseApp, error) {
 		return value, errors.New("Iru returned invalid In-House App managed fields (content withheld)")
 	}
 	value.ID = strings.ToLower(value.ID)
+	if value.SHA256 != nil {
+		if !ValidInstallerSHA256(*value.SHA256) {
+			return value, errors.New("Iru returned an invalid IPA checksum (content withheld)")
+		}
+		lower := strings.ToLower(*value.SHA256)
+		value.SHA256 = &lower
+	}
+	if value.FileSize != nil && *value.FileSize < 0 {
+		return value, errors.New("Iru returned an invalid IPA file size")
+	}
 	return value, nil
 }
 func (c *Client) CreateInHouseApp(ctx context.Context, input InHouseAppInput) (InHouseApp, error) {
