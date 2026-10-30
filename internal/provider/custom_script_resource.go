@@ -22,6 +22,7 @@ var (
 	_ resource.ResourceWithConfigure      = &CustomScriptResource{}
 	_ resource.ResourceWithImportState    = &CustomScriptResource{}
 	_ resource.ResourceWithValidateConfig = &CustomScriptResource{}
+	_ resource.ResourceWithModifyPlan     = &CustomScriptResource{}
 )
 
 type CustomScriptResource struct{ client *client.Client }
@@ -258,4 +259,19 @@ func (*CustomScriptResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strings.ToLower(req.ID))...)
+}
+
+func (*CustomScriptResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var before, after scriptModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &before)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &after)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !before.RemediationScript.IsUnknown() && before.RemediationScript.ValueString() != "" && !after.RemediationScript.IsUnknown() && after.RemediationScript.ValueString() == "" {
+		resp.Diagnostics.AddError("Remediation clearing unsupported", client.RemediationClearUnsupported)
+	}
 }

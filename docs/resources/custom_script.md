@@ -13,14 +13,16 @@ Manages one Iru Custom Script, including audit/remediation content and Self Serv
 
 Script and remediation contents remain in Terraform state even though Terraform
 redacts them in displays. Do not embed credentials. New items default to inactive,
-no restart, no Self Service, and execution frequency `once`. An empty remediation
-string requests removal. API permissions, normalization, remediation clearing and
-Self Service transitions still require isolated live acceptance testing.
+no restart, no Self Service, and execution frequency `once`. An absent remediation script is omitted on creation. Clearing existing remediation
+content is currently blocked: live testing returned HTTP 400 for an empty value.
+No alternative null/removal contract is verified. Retain the existing content;
+the provider will not replace or delete a Script to clear this field. Self Service
+transitions still require isolated live acceptance testing.
 
 Creation omits absent remediation content. Updates keep a nonblank name and send
 only changed optional content, flags and Self Service settings. An unchanged
 empty remediation field is not resent by a name-only update; changing existing
-remediation to an empty string still explicitly requests removal.
+remediation to an empty string is rejected during planning and before PATCH.
 
 Destroy permanently deletes the Library Item and can affect assignments managed
 elsewhere. Review the plan and consider Terraform `prevent_destroy` where needed.

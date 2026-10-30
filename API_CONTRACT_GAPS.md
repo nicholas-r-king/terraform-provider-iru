@@ -82,3 +82,17 @@ Each supported operation still needs immutable provider/caller revisions and
 actual isolated-tenant results. Passing unit, protocol or mocked CLI tests is
 not live CRUD evidence. Device enrollment and one-shot operational commands are
 distinct from ownership of configuration settings.
+
+
+## Custom Script remediation removal
+
+Live field testing on an inactive, unassigned disposable Script accepted nonempty
+remediation but rejected a subsequent empty `remediation_script` PATCH with
+HTTP 400. A verified alternative removal contract is unavailable. The vendor
+SDK filters null values to omission; its mocked repository tests assume empty
+clearing, which does not override the live rejection. Do not guess null, an
+undocumented endpoint, or replace/delete an existing Library Item to simulate a
+field clear. Planning and updates currently refuse a known nonempty-to-empty
+transition before transport; retain existing remediation until a contract is
+verified. Creation without remediation and unchanged-empty metadata updates
+remain supported.

@@ -10,8 +10,8 @@ in [API contract gaps](API_CONTRACT_GAPS.md).
 
 | Object | Documented contract | Provider support |
 | --- | --- | --- |
-| Custom Script | CRUD | Resource; import and drift handling; live lifecycle unverified |
-| Custom Profile | CRUD | Resource; import and drift handling; live lifecycle unverified |
+| Custom Script | CRUD | Baseline/import/drift/delete and selected field variants passed live; clearing existing remediation is blocked after HTTP 400 rejection |
+| Custom Profile | CRUD | Baseline/import/drift/delete and inactive content/platform variants passed live; activation and real payload enforcement remain unverified |
 | Custom App | CRUD, upload | Existing file key or checksum-verified streaming local upload; live lifecycle unverified |
 | Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
 | Blueprint template catalog | Read only; grouped positive integer IDs | Bounded catalog lookup projects IDs/names/categories for source_type=template cloning; parameters are not made writable |
