@@ -92,7 +92,18 @@ func (c *Client) CreateScript(ctx context.Context, input ScriptInput) (Script, e
 	if err := input.Validate(); err != nil {
 		return Script{}, err
 	}
-	data, err := c.request(ctx, http.MethodPost, scriptsPath, input, http.StatusCreated)
+	// An absent remediation script is optional on creation. Do not submit an
+	// empty value to serializers that reject blank optional script fields.
+	// PATCH still sends an explicit empty string to request removal.
+	var remediation *string
+	if input.RemediationScript != "" {
+		remediation = &input.RemediationScript
+	}
+	payload := struct {
+		ScriptInput
+		RemediationScript *string `json:"remediation_script,omitempty"`
+	}{ScriptInput: input, RemediationScript: remediation}
+	data, err := c.request(ctx, http.MethodPost, scriptsPath, payload, http.StatusCreated)
 	if err != nil {
 		return Script{}, err
 	}

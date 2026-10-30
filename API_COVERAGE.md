@@ -1,0 +1,43 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+
+# API coverage and migration requirements
+
+Coverage is based on the [official Iru Endpoint Management API collection](https://api-docs.iru.com/api/collections/15284493/TzCTZkBe?segregateAuth=true&versionTag=latest),
+reviewed 2026-10-29. An API endpoint existing does not establish that it works with
+a particular tenant or token. Synthetic tests and live acceptance are separate.
+
+| Object | Documented contract | Provider support |
+| --- | --- | --- |
+| Custom Script | CRUD | Resource; import and drift handling; live lifecycle unverified |
+| Custom Profile | CRUD | Resource; import and drift handling; live lifecycle unverified |
+| Custom App | CRUD, upload | Resource with existing file key; upload automation incomplete |
+| Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
+| Tag | CRUD; read via paginated list | Resource; import, drift and disappearance handling |
+| In-House App | CRUD, upload and upload status | Pending |
+| ADE integration | CRUD and token renewal | Pending; needs an Apple server token for live create/renew |
+| Device Note | CRUD | Pending; live validation needs an explicitly selected disposable device |
+| Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |
+| Blueprint routing | Read and update enrollment settings | Pending; routing rule editing is not documented |
+| Device/ADE device metadata | Read and PATCH selected fields | Pending; enrollment is external, so full object CRUD is unavailable |
+| Self Service category | List only | Lookup pending; no documented create/update/delete |
+| Directory user | Read/delete only | Lookup pending; creation/update belongs to the directory integration |
+| Device inventory, activity, status, licensing, audit, vulnerability data | Read-oriented API | Reporting scope; does not provide configuration CRUD |
+| Device commands | One-shot operational actions | Not configuration resources; enrollment/deletion/erase are not CRUD equivalents |
+| Other built-in Library Item types, Assignment Map conditions and parameters | No public CRUD contract in this collection | API limitation; no undocumented UI endpoints are used |
+
+## Completion criteria
+
+Each manageable object needs create, refresh, update, import, a no-change plan
+after apply/import, drift repair, delete, and disappearance handling. Its tests
+must cover real request encoding, explicit false/clear values, failures that
+retain state, partial creation identity recovery, and writes that are not replayed.
+Live evidence must identify the immutable provider and consumer revisions and
+each completed lifecycle phase; a mock pass is not a live pass.
+
+Migration should begin with read-only inventory and configuration generation,
+followed by import into protected state and inspection of the resulting plan.
+Import itself must not activate, reassign, recreate, or delete an existing item.
+Static defaults can plan changes to imported settings: configure all existing
+values that must be retained before applying. Use `prevent_destroy` for production
+objects when appropriate. Application installers and XML/script content can
+remain in state even when their schema fields are marked sensitive.
