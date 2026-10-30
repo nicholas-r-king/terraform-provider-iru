@@ -17,6 +17,13 @@ binary profiles and Android/Windows write fields are outside this resource's
 scope. XML is checked for syntax and a single plist root; Iru validates the actual
 MDM payload. External entities are not fetched. Content is not arbitrarily
 reformatted: whitespace inside XML string/data values can be meaningful.
+Iru generates the outer `PayloadUUID`, `PayloadIdentifier`, and
+`PayloadDisplayName` from the Library Item, and may add `PayloadScope=System`
+when omitted. The provider preserves configured XML only after verifying that
+metadata against the returned item and comparing the remaining plist. Dictionary
+order and container formatting may differ; nested payload identifiers, scalar
+values, array order, explicit scope, and other policy fields must still match.
+Unsupported or ambiguous plist structures never suppress a difference.
 Read/import requires complete target metadata for all five managed platforms;
 missing/null flags produce a diagnostic rather than an inferred false value.
 
