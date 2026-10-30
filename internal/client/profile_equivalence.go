@@ -12,7 +12,8 @@ import (
 // ProfileSourceEquivalent compares managed payloads while verifying the three
 // top-level metadata fields Iru generates from the Library Item. Nested payload
 // identifiers, scope changes, policy values and unknown root keys are not ignored.
-// Evidence: iructl's profile create/update integration tests and live API reads.
+// Live API reads show the generated payload UUID is independent of the item ID.
+// Item identity is checked by the client; payload identity is server-generated.
 func ProfileSourceEquivalent(source string, remote Profile) bool {
 	a, ok := parseProfilePlist(source)
 	if !ok {
@@ -27,7 +28,7 @@ func ProfileSourceEquivalent(source string, remote Profile) bool {
 		return v.Text, ok && v.Kind == "string"
 	}
 	uuid, ok := text(b.Dict, "PayloadUUID")
-	if !ok || !ValidID(uuid) || !strings.EqualFold(uuid, remote.ID) {
+	if !ok || !ValidID(uuid) || !ValidID(remote.ID) {
 		return false
 	}
 	identifier, ok := text(b.Dict, "PayloadIdentifier")

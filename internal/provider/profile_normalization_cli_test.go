@@ -14,13 +14,14 @@ import (
 	"github.com/nicholas-r-king/terraform-provider-iru/internal/client"
 )
 
-// Model the independently observed API rewrite, not the provider's comparator.
+// Model the live-observed API rewrite, including a separately generated root UUID.
 // The nested payload remains user-managed and must still detect/repair drift.
 func TestTerraformCLIProfileGeneratedEnvelope(t *testing.T) {
 	const source = `<plist version="1.0"><dict><key>PayloadUUID</key><string>source-uuid</string><key>PayloadIdentifier</key><string>source-id</string><key>PayloadDisplayName</key><string>Source name</string><key>PayloadType</key><string>Configuration</string><key>PayloadVersion</key><integer>1</integer><key>PayloadContent</key><array><dict><key>PayloadIdentifier</key><string>nested-id</string><key>Setting</key><string> managed value </string></dict></array></dict></plist>`
 	const mdm = "com.kandji.profile.custom." + syntheticID
+	const payloadUUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 	render := func(xml, name string) string {
-		xml = strings.NewReplacer("<string>source-uuid</string>", "<string>"+syntheticID+"</string>", "<string>source-id</string>", "<string>"+mdm+"</string>", "<string>Source name</string>", "<string>"+name+"</string>").Replace(xml)
+		xml = strings.NewReplacer("<string>source-uuid</string>", "<string>"+payloadUUID+"</string>", "<string>source-id</string>", "<string>"+mdm+"</string>", "<string>Source name</string>", "<string>"+name+"</string>").Replace(xml)
 		if !strings.Contains(xml, "<key>PayloadScope</key>") {
 			xml = strings.Replace(xml, "<dict>", "<dict><key>PayloadScope</key><string>System</string>", 1)
 		}

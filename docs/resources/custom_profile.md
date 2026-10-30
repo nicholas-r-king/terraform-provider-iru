@@ -20,7 +20,9 @@ reformatted: whitespace inside XML string/data values can be meaningful.
 Iru generates the outer `PayloadUUID`, `PayloadIdentifier`, and
 `PayloadDisplayName` from the Library Item, and may add `PayloadScope=System`
 when omitted. The provider preserves configured XML only after verifying that
-metadata against the returned item and comparing the remaining plist. Dictionary
+identifier and display name against the returned item, requiring a valid generated
+payload UUID, and comparing the remaining plist. The generated payload UUID is
+independent of the Library Item ID; the provider does not compare them. Dictionary
 order and container formatting may differ; nested payload identifiers, scalar
 values, array order, explicit scope, and other policy fields must still match.
 Unsupported or ambiguous plist structures never suppress a difference.
