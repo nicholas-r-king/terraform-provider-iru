@@ -36,4 +36,4 @@ data "iru_ade_device" "example" {
 - `id` (String) Canonical device UUID.
 - `override_dep_profile_id` (String) ADE Library Item override UUID, or null when cleared or not reported by the API. Management requires the API to report this property.
 - `use_blueprint_routing` (Boolean) Whether the ADE record uses Blueprint routing.
-- `user_id` (String) Assigned directory-user UUID, or null when unassigned.
+- `user_id` (String) Assigned directory-user UUID, legacy ADE numeric user ID represented as a decimal string, or null when unassigned. A numeric ID is not a directory UUID and must not be substituted into user lookups or settings writes.

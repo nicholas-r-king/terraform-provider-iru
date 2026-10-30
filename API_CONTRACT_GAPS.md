@@ -61,6 +61,13 @@ whether omission of the override property means unsupported, unassigned or
 temporarily unavailable. Until then, override management requires an explicit
 reported field, and undocumented ADE null-clearing is refused.
 
+Live read-only validation also found an ADE detail response whose `user_id` is
+a positive JSON integer, while official read/write examples use directory UUIDs.
+The ADE data source preserves that legacy identity as a decimal string without
+mapping it to a directory UUID. Settings management still requires the documented
+UUID contract and refuses this legacy representation. Numeric user writes,
+cross-identity mapping and ADE assignment changes have not been validated.
+
 ADE integrations separately document Blueprint Routing assignment and now have
 that input/state support. The collection's saved responses and multipart bodies
 remain fixed-Blueprint examples. The provider accepts explicit documented
