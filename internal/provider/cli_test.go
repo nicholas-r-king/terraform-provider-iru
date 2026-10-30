@@ -132,7 +132,15 @@ func TestTerraformCLI(t *testing.T) {
 				return
 			}
 			var input client.ScriptInput
-			if json.NewDecoder(req.Body).Decode(&input) != nil || input.Validate() != nil {
+			if req.Method == "PATCH" {
+				input = object.ScriptInput
+			}
+			decodeError := json.NewDecoder(req.Body).Decode(&input)
+			if !input.ShowInSelfService {
+				input.SelfServiceCategoryID = nil
+				input.SelfServiceRecommended = nil
+			}
+			if decodeError != nil || input.Validate() != nil {
 				t.Error("invalid write reached mock")
 				w.WriteHeader(400)
 				return

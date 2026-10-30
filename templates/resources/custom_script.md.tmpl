@@ -17,6 +17,11 @@ no restart, no Self Service, and execution frequency `once`. An empty remediatio
 string requests removal. API permissions, normalization, remediation clearing and
 Self Service transitions still require isolated live acceptance testing.
 
+Creation omits absent remediation content. Updates keep a nonblank name and send
+only changed optional content, flags and Self Service settings. An unchanged
+empty remediation field is not resent by a name-only update; changing existing
+remediation to an empty string still explicitly requests removal.
+
 Destroy permanently deletes the Library Item and can affect assignments managed
 elsewhere. Review the plan and consider Terraform `prevent_destroy` where needed.
 This resource cannot inspect or protect external assignments. Writes are never

@@ -125,14 +125,21 @@ func (c *Client) GetScript(ctx context.Context, id string) (Script, error) {
 	return result, err
 }
 
-func (c *Client) UpdateScript(ctx context.Context, id string, input ScriptInput) (Script, error) {
+func (c *Client) UpdateScript(ctx context.Context, id string, input ScriptInput, prior ...ScriptInput) (Script, error) {
 	if !ValidID(id) {
 		return Script{}, errors.New("Custom Script ID must be a UUID")
 	}
 	if err := input.Validate(); err != nil {
 		return Script{}, err
 	}
-	data, err := c.request(ctx, http.MethodPatch, scriptsPath+"/"+strings.ToLower(id), input, http.StatusOK)
+	if len(prior) > 1 {
+		return Script{}, errors.New("script update accepts at most one prior state")
+	}
+	var payload any = input
+	if len(prior) == 1 {
+		payload = scriptChanges(input, prior[0])
+	}
+	data, err := c.request(ctx, http.MethodPatch, scriptsPath+"/"+strings.ToLower(id), payload, http.StatusOK)
 	if err != nil {
 		return Script{}, err
 	}
@@ -141,6 +148,39 @@ func (c *Client) UpdateScript(ctx context.Context, id string, input ScriptInput)
 		return Script{}, errors.New("Iru response ID does not match the updated Custom Script")
 	}
 	return result, err
+}
+
+// Keep a valid nonblank name as the stable metadata field. Unchanged optional
+// content/flags are omitted; changed empty remediation is an explicit clear.
+func scriptChanges(input, prior ScriptInput) map[string]any {
+	fields := map[string]any{"name": input.Name}
+	if input.Script != prior.Script {
+		fields["script"] = input.Script
+	}
+	if input.RemediationScript != prior.RemediationScript {
+		fields["remediation_script"] = input.RemediationScript
+	}
+	if input.ExecutionFrequency != prior.ExecutionFrequency {
+		fields["execution_frequency"] = input.ExecutionFrequency
+	}
+	if input.Active != prior.Active {
+		fields["active"] = input.Active
+	}
+	if input.Restart != prior.Restart {
+		fields["restart"] = input.Restart
+	}
+	if input.ShowInSelfService != prior.ShowInSelfService {
+		fields["show_in_self_service"] = input.ShowInSelfService
+	}
+	if input.ShowInSelfService {
+		if input.SelfServiceCategoryID != nil && (prior.SelfServiceCategoryID == nil || !strings.EqualFold(*input.SelfServiceCategoryID, *prior.SelfServiceCategoryID)) {
+			fields["self_service_category_id"] = *input.SelfServiceCategoryID
+		}
+		if input.SelfServiceRecommended != nil && (prior.SelfServiceRecommended == nil || *input.SelfServiceRecommended != *prior.SelfServiceRecommended) {
+			fields["self_service_recommended"] = *input.SelfServiceRecommended
+		}
+	}
+	return fields
 }
 
 func (c *Client) DeleteScript(ctx context.Context, id string) error {
