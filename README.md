@@ -17,6 +17,11 @@ See [API coverage](API_COVERAGE.md) for the remaining API gaps.
 settings. This singleton has GET/PATCH only: matching adoption/import is
 read-only, and destroy leaves Iru settings intact while releasing management.
 
+`iru_device_settings` and `iru_ade_device_settings` adopt existing device records
+and manage only configured assignment metadata through GET/PATCH. Destroy retains
+the devices and their settings. Exact-UUID `iru_device`, `iru_ade_device`, and
+`iru_user` lookups support selecting existing assignments; they perform no writes.
+
 This is a development provider. Real Iru compatibility has not been
 acceptance-tested. CI checks synthetic unit, Framework and Terraform CLI behavior
 on Linux and macOS; check the commit's results before using a build. No Registry
