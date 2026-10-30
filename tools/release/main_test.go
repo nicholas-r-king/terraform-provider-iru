@@ -136,7 +136,7 @@ func TestExperimentalIdentity(t *testing.T) {
 }
 
 func TestArchiveRejectsTraversalAndDuplicates(t *testing.T) {
-	for _, members := range [][]string{{"../outside"}, {"/outside"}, {"release-legal\\outside"}, {"LICENSE", "LICENSE"}, {"terraform-provider-unrelated_v0.1.0-alpha.1"}, {"terraform-provider-iru_v0.1.0-alpha.1/", "LICENSE/", "release-legal/SOURCE.txt/", "release-legal/go/LICENSE/", "release-legal/modules/github.com/hashicorp/terraform-plugin-framework@v1.19.0/LICENSE/"}} {
+	for _, members := range [][]string{{"../outside"}, {"/outside"}, {"release-legal\\outside"}, {"LICENSE", "LICENSE"}, {"terraform-provider-unrelated_v0.1.0-alpha.1"}, {"terraform-provider-iru_v0.1.0-alpha.1/", "LICENSE/", "release-legal/go.mod/", "release-legal/SOURCE.txt/", "release-legal/go/LICENSE/", "release-legal/modules/github.com/hashicorp/terraform-plugin-framework@v1.19.0/LICENSE/"}} {
 		name := filepath.Join(t.TempDir(), "synthetic.zip")
 		file, err := os.Create(name)
 		if err != nil {
@@ -147,6 +147,12 @@ func TestArchiveRejectsTraversalAndDuplicates(t *testing.T) {
 			writer, err := archive.Create(member)
 			if err != nil {
 				t.Fatal(err)
+			}
+			// ZIP directory entries have no body. Keep valid empty directory
+			// placeholders so the verifier, rather than the fixture writer,
+			// rejects substituting directories for required release files.
+			if strings.HasSuffix(member, "/") {
+				continue
 			}
 			if _, err := writer.Write([]byte("synthetic")); err != nil {
 				t.Fatal(err)
