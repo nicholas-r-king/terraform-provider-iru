@@ -75,8 +75,9 @@ check. It covers native Linux/macOS amd64 and arm64, plus minimum Go 1.25.0 on
 Linux amd64, using Terraform 1.17.0. Documentation checks use Go 1.27.3; the
 Go 1.25.0 job checks the provider without running the documentation generator.
 Actions are pinned to immutable SHAs with
-read-only repository permissions and no tenant secrets. There is no release or
-live-test workflow in this repository.
+read-only repository permissions and no tenant secrets. A separate, default-off
+manual workflow prepares experimental release drafts; see [RELEASING.md](RELEASING.md).
+There is no live-test workflow in this repository.
 
 Before a Registry release: choose a SemVer tag and changelog, verify the declared
 Go/Terraform minimums, build and smoke-test each supported OS/architecture,

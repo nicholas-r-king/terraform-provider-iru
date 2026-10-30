@@ -72,6 +72,8 @@ development; no PowerShell is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
 CI uses Terraform 1.17.0 with Go 1.25.0 and 1.27.3. Linux/macOS amd64 and arm64
 have native test jobs. No provider repository tests contact a live Iru tenant.
 New resources, API fields, and acceptance tests require a verified contract.
+Public Registry release preparation and its remaining owner actions are described
+in [RELEASING.md](RELEASING.md); the manual workflow creates experimental drafts.
 
 ## License
 
