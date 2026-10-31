@@ -3,16 +3,16 @@
 # API coverage and migration requirements
 
 Coverage is based on the [official Iru Endpoint Management API collection](https://api-docs.iru.com/api/collections/15284493/TzCTZkBe?segregateAuth=true&versionTag=latest),
-reviewed 2026-10-29. An API endpoint existing does not establish that it works with
+rechecked 2026-10-31. An API endpoint existing does not establish that it works with
 a particular tenant or token. Synthetic tests and live acceptance are separate.
 Unresolved public contracts and the evidence needed to implement them are listed
-in [API contract gaps](API_CONTRACT_GAPS.md).
+in [API contract gaps](API_CONTRACT_GAPS.md). The complete current argument/data-source inventory and evidence limits are in [validation status](VALIDATION_STATUS.md).
 
 | Object | Documented contract | Provider support |
 | --- | --- | --- |
 | Custom Script | CRUD | Baseline/import/drift/delete and selected field variants passed live; clearing existing remediation is blocked after HTTP 400 rejection |
 | Custom Profile | CRUD | Baseline/import/drift/delete and inactive content/platform variants passed live; activation and real payload enforcement remain unverified |
-| Custom App | CRUD, upload | Reviewed inactive/unassigned PKG source-upload baseline/import/drift/delete passed; existing-key/replacement/enforcement/Self Service variants remain unverified |
+| Custom App | CRUD, upload | Candidate221ac4a inactive/unassigned PKG create/import/drift/repair/delete and independent cleanup passed; selected script/enforcement/restart variants passed in an earlier run whose later repair failure remains unresolved. Existing-key/replacement/Self Service/installation coverage remains incomplete |
 | Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
 | Blueprint template catalog | Read only; grouped positive integer IDs | Bounded catalog lookup projects IDs/names/categories for source_type=template cloning; parameters are not made writable |
 | Tag | CRUD; read via paginated list | Resource; import, drift and disappearance handling |
@@ -26,7 +26,7 @@ in [API contract gaps](API_CONTRACT_GAPS.md).
 | Self Service category | List only | ID/name lookup through configuration inventory; no documented create/update/delete |
 | Directory user | Read/delete only | Exact-UUID identity/status lookup. Creation/update belongs to the directory integration; no destructive user lifecycle resource is invented |
 | Device inventory, activity, status, licensing, audit, vulnerability data | Read-oriented API | Reporting scope; does not provide configuration CRUD |
-| Device commands | One-shot operational actions | Not configuration resources; enrollment/deletion/erase are not CRUD equivalents |
+| Device actions | Operational commands, including some persistent-setting setters | Not currently modeled. Naming/preferences need verified async/read/convergence semantics before a declarative resource; enrollment/deletion/erase are not CRUD equivalents |
 | Other built-in Library Item types, Assignment Map conditions and parameters | No verified complete public CRUD contract in this collection | Still required for full configuration coverage; contract discovery and implementation remain open, with no invented endpoints |
 
 ## Completion criteria

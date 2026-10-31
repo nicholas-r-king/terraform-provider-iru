@@ -3,7 +3,7 @@
 # Contracts needed for complete configuration migration
 
 These questions identify missing or contradictory public API evidence. They are
-not claims that no additional API exists. Sources were checked on 2026-10-29:
+not claims that no additional API exists. The public collection was rechecked on 2026-10-31; earlier permission-UI findings remain attributed to their recorded review:
 [rendered reference](https://api-docs.iru.com/) and its
 [published Postman collection](https://api-docs.iru.com/api/collections/15284493/TzCTZkBe?segregateAuth=true&versionTag=latest).
 No tenant data or credentials are needed to clarify these contracts.
@@ -96,9 +96,11 @@ The documented HTTP 503 can mean a Custom App upload is still processing. The
 provider previously attempted its first Library Item write immediately after S3
 accepted a source upload. Iru's first-party irupkg workflow instead waits five
 seconds at that boundary. The provider now includes that cancellation-aware
-initial grace, tested locally; it is not a readiness guarantee or a live-proven
-resolution. Two inactive test creates returned HTTP 503; subsequent complete
-inventory/state reconciliation found no Library Item from either attempt.
+initial grace. Subsequent candidate221ac4a source-upload creation and a focused
+create/import/drift/repair/delete lifecycle passed live, with independent absence
+and empty-state reconciliation. This is not a readiness guarantee or proof of why
+earlier creates failed. Two earlier inactive test creates returned HTTP503;
+complete inventory/state reconciliation found no Library Item from either attempt.
 
 The checked public Custom App API lists no upload-readiness GET. The IPA status
 route is a different contract. A 503 alone does not establish that a write was
@@ -130,3 +132,15 @@ field clear. Planning and updates currently refuse a known nonempty-to-empty
 transition before transport; retain existing remediation until a contract is
 verified. Creation without remediation and unchanged-empty metadata updates
 remain supported.
+
+
+## Configuration read/export primitives
+
+The provider inventory currently projects UUID/name pairs, and the generic Library
+Item lookup returns membership identity/name. It does not expose complete managed
+Script/Profile/App/In-House/ADE configuration as dedicated data sources or export.
+The documented detail reads and existing client models make this an unimplemented
+provider read/export capability, rather than evidence of an absent API. Managed
+resource import can recover some state, but is not a zero-risk configuration
+migration/export substitute. Keep this gap distinct from missing parameter/map
+write contracts. See the complete [validation inventory](VALIDATION_STATUS.md).

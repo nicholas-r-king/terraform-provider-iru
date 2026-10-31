@@ -226,3 +226,68 @@ func TestTerraformCLIRootAssignmentRejectsMapAndBadImport(t *testing.T) {
 		t.Fatal("map rejection not explained")
 	}
 }
+
+func TestTerraformCLIRootAssignmentMalformedReadsRetainState(t *testing.T) {
+	var mu sync.Mutex
+	badBlueprint, badMembership, absent := false, false, false
+	writes := 0
+	run, write := mockTerraform(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			writes++
+			w.WriteHeader(405)
+			return
+		}
+		prefix := "/api/v1/blueprints/" + syntheticCategory
+		switch r.URL.Path {
+		case prefix:
+			if badBlueprint {
+				_, _ = w.Write([]byte(`{"private":"synthetic-private-response"}`))
+				return
+			}
+			_, _ = fmt.Fprintf(w, `{"id":%q,"name":"Synthetic","type":"classic"}`, syntheticCategory)
+		case prefix + "/list-library-items":
+			if badMembership {
+				_, _ = w.Write([]byte(`{"private":"synthetic-private-response"}`))
+				return
+			}
+			items := []map[string]string{}
+			if !absent {
+				items = append(items, map[string]string{"id": assignmentItemA, "name": "Synthetic"})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"results": items, "next": nil})
+		default:
+			t.Error("unexpected root-assignment read path")
+			w.WriteHeader(400)
+		}
+	}))
+	address := "iru_blueprint_library_item_assignment.example"
+	write(fmt.Sprintf("resource \"iru_blueprint_library_item_assignment\" \"example\" {\n blueprint_id=%q\n library_item_id=%q\n}\n", syntheticCategory, assignmentItemA))
+	run(0, "import", "-no-color", address, syntheticCategory+"/"+assignmentItemA)
+	before := run(0, "state", "pull")
+	for _, membership := range []bool{false, true} {
+		mu.Lock()
+		badBlueprint, badMembership = !membership, membership
+		mu.Unlock()
+		if out := run(1, "apply", "-refresh-only", "-auto-approve", "-no-color"); strings.Contains(out, "synthetic-private-response") {
+			t.Fatal("private malformed response leaked")
+		}
+		if run(0, "state", "pull") != before {
+			t.Fatal("malformed read erased imported membership")
+		}
+	}
+	mu.Lock()
+	badBlueprint, badMembership, absent = false, false, true
+	mu.Unlock()
+	run(0, "apply", "-refresh-only", "-auto-approve", "-no-color")
+	if strings.TrimSpace(run(0, "state", "list")) != "" {
+		t.Fatal("complete missing-pair read retained absent membership")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if writes != 0 {
+		t.Fatalf("import/refresh sent %d mutations", writes)
+	}
+}
