@@ -12,22 +12,22 @@ in [API contract gaps](API_CONTRACT_GAPS.md).
 | --- | --- | --- |
 | Custom Script | CRUD | Baseline/import/drift/delete and selected field variants passed live; clearing existing remediation is blocked after HTTP 400 rejection |
 | Custom Profile | CRUD | Baseline/import/drift/delete and inactive content/platform variants passed live; activation and real payload enforcement remain unverified |
-| Custom App | CRUD, upload | Existing file key or checksum-verified streaming local upload; live lifecycle unverified |
+| Custom App | CRUD, upload | Reviewed inactive/unassigned PKG source-upload baseline/import/drift/delete passed; existing-key/replacement/enforcement/Self Service variants remain unverified |
 | Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
 | Blueprint template catalog | Read only; grouped positive integer IDs | Bounded catalog lookup projects IDs/names/categories for source_type=template cloning; parameters are not made writable |
 | Tag | CRUD; read via paginated list | Resource; import, drift and disappearance handling |
 | In-House App | CRUD, upload and upload status | Existing key or local streaming upload with bounded IPA validation; live lifecycle unverified |
 | ADE integration | CRUD, token renewal, Blueprint/routing assignment | Resource with write-only token input and local renewal version; documented routing/Blueprint choices supported; multipart/response routing details remain live-unverified |
 | ADE public key | Read-only ABM bootstrap PEM | Public-only certificate/key lookup with exact-response SHA256; no private material or trust-chain assertion |
-| Device Note | CRUD | Resource with composite UUID import; live validation needs a selected disposable device |
-| Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |
+| Device Note | CRUD | Composite UUID import; pilot-only baseline/Unicode/drift/repair/delete passed; other normalization/replacement variants remain unverified |
+| Library Item placement | Assign/remove POST; complete aggregate membership list | Classic-root pair resource with composite import, read-before-write idempotence, verified add/remove convergence and local wire/Terraform tests. No live assignment acceptance yet. All Assignment Maps refused until node placement is observable |
 | Blueprint routing | Read and update enrollment settings | Settings resource and sensitive lookup; matching adoption/import is read-only, destroy relinquishes management; live validation pending. Routing rule editing is not documented |
 | Device/ADE device metadata | Read and PATCH selected fields | Settings resources and exact-UUID lookups. Unconfigured fields stay unmanaged; destroy releases management without deleting devices. The ADE lookup preserves reported legacy numeric user IDs as decimal strings, without treating them as directory UUIDs or enabling numeric writes. ADE override management requires getter support; undocumented ADE null-clearing remains a contract gap. Live field acceptance incomplete |
 | Self Service category | List only | ID/name lookup through configuration inventory; no documented create/update/delete |
 | Directory user | Read/delete only | Exact-UUID identity/status lookup. Creation/update belongs to the directory integration; no destructive user lifecycle resource is invented |
 | Device inventory, activity, status, licensing, audit, vulnerability data | Read-oriented API | Reporting scope; does not provide configuration CRUD |
 | Device commands | One-shot operational actions | Not configuration resources; enrollment/deletion/erase are not CRUD equivalents |
-| Other built-in Library Item types, Assignment Map conditions and parameters | No public CRUD contract in this collection | API limitation; no undocumented UI endpoints are used |
+| Other built-in Library Item types, Assignment Map conditions and parameters | No verified complete public CRUD contract in this collection | Still required for full configuration coverage; contract discovery and implementation remain open, with no invented endpoints |
 
 ## Completion criteria
 

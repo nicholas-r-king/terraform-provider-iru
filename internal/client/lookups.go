@@ -24,6 +24,19 @@ type LibraryItem struct {
 	Name string `json:"name"`
 }
 
+type libraryMembershipAbsentError struct{}
+
+func (*libraryMembershipAbsentError) Error() string {
+	return "Library Item UUID was not found in the selected Blueprint"
+}
+
+// IsLibraryMembershipAbsent is true only after a complete validated listing.
+// A collection/page HTTP404, permission failure or malformed page is not absence.
+func IsLibraryMembershipAbsent(err error) bool {
+	var absent *libraryMembershipAbsentError
+	return errors.As(err, &absent)
+}
+
 func (c *Client) GetBlueprint(ctx context.Context, id string) (Blueprint, error) {
 	if !ValidID(id) {
 		return Blueprint{}, errors.New("Blueprint ID must be a UUID")
@@ -120,7 +133,7 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 		}
 	}
 	if found == nil {
-		return LibraryItem{}, errors.New("Library Item UUID was not found in the selected Blueprint")
+		return LibraryItem{}, &libraryMembershipAbsentError{}
 	}
 	return *found, nil
 }

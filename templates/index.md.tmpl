@@ -10,9 +10,12 @@ description: |-
 
 {{ .Description | trimspace }}
 
-This unofficial provider has no published Registry release. Local development
-requires a Terraform CLI development override pointing to the built executable.
-Real Iru compatibility has not been acceptance-tested.
+The [published preview](https://registry.terraform.io/providers/nicholas-r-king/iru/0.1.0-alpha.1)
+predates the current draft safety/compatibility changes. Draft development builds
+use an explicitly configured Terraform CLI development override. Selected live
+resource/metadata tests have passed, but full field, assignment, enrollment and
+device-delivery acceptance is incomplete. See the repository API coverage and
+exact commit checks before using a build; a mock pass is not production readiness.
 
 Set `IRU_API_URL` to your HTTPS tenant API origin and `IRU_API_TOKEN` through
 your existing secure environment. Explicit configuration takes precedence over

@@ -24,17 +24,19 @@ The membership GET request (`34af40a5-7273-425c-9ea5-2c8a5dbbe29f`)
 returns Library Item ID/name entries, without node IDs. It can verify Blueprint
 membership but cannot prove a particular Assignment Map node placement.
 
-Required evidence:
+First-party permission UI inspection on 2026-10-31 verifies the distinct removal
+route as `POST /api/v1/blueprints/{blueprint_id}/remove-library-item`. The documented
+body supplies `library_item_id` and, for map nodes, `assignment_node_id`; examples
+return UUID arrays. The classic-root resource omits node placement, verifies the
+Blueprint type and complete list before/after writes, and avoids a POST when the
+desired membership already holds. It does not infer membership from a success
+array, guess DELETE, or treat collection404 as an absent pair. Live convergence,
+processing/propagation and error semantics remain unverified for this new resource.
 
-- The distinct removal method/path and exact payload, successful response, and
-  already-absent behavior for classic Blueprints and Assignment Maps.
-- A supported read endpoint exposing each Library Item's assignment-node
-  placements, with pagination, identity and propagation semantics.
-- If no node-level read exists, the supported import/drift contract for a
-  declarative assignment integration.
-
-The provider does not guess a removal route, treat assignment as a toggle, or
-claim node-specific refresh/import verification from Blueprint-wide membership.
+Still required for Assignment Maps: a supported node-aware read/import/drift/remove
+contract, including multiple placements of one item, pagination, identity and
+propagation. A flattened list cannot prove which node owns an assignment. All map
+placement is therefore refused by this resource, not falsely claimed tested.
 
 ## Built-in Library Items, parameters and map/routing definitions
 
