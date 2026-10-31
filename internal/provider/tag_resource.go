@@ -89,7 +89,7 @@ func (r *TagResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 	value, err := r.client.GetTag(ctx, data.ID.ValueString())
-	if client.IsNotFound(err) {
+	if client.IsTagAbsent(err) {
 		resp.State.RemoveResource(ctx)
 		return
 	}

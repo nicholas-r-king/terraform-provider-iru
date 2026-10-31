@@ -13,6 +13,19 @@ import (
 
 const tagsPath = "/api/v1/tags"
 
+// A missing Tag is proven only by a complete listing. An HTTP404 for the
+// collection (or a later page) is a read failure, not evidence of object absence.
+type tagAbsentError struct{}
+
+func (*tagAbsentError) Error() string { return "Iru Tag was absent from a complete listing" }
+func (*tagAbsentError) Unwrap() error {
+	return &APIError{Method: http.MethodGet, StatusCode: http.StatusNotFound}
+}
+func IsTagAbsent(err error) bool {
+	var absent *tagAbsentError
+	return errors.As(err, &absent)
+}
+
 type Tag struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -103,7 +116,7 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 		}
 	}
 	if found == nil {
-		return Tag{}, &APIError{Method: http.MethodGet, StatusCode: http.StatusNotFound}
+		return Tag{}, &tagAbsentError{}
 	}
 	return *found, nil
 }

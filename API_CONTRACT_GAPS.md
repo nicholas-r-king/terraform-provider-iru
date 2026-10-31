@@ -75,6 +75,14 @@ routing response fields and legacy nested fixed-Blueprint metadata, and encodes
 multipart null selection as an empty field plus an explicit routing flag. Real
 create/renew/import acceptance of those representations still needs verification.
 
+## Tag collection failure versus object absence
+
+Tags have no documented detail GET. Only a completed, valid, bounded listing
+that omits the captured UUID proves the Tag absent. A collection or later-page
+HTTP404 is a failed read and must retain Terraform state, just like authorization
+failure or malformed success data. This distinction is verified with local
+Terraform fault injection; no live endpoint failure was induced.
+
 ## Detached installer artifacts
 
 Custom App and IPA upload/validation workflows are documented, but detached
