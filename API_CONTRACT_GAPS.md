@@ -92,6 +92,23 @@ artifact deletion/abort/garbage-collection is not. Clarify upload lifetime,
 orphan enumeration/deletion and processing-readiness for Custom Apps. Library
 Item deletion is implemented separately and is not described as artifact cleanup.
 
+The documented HTTP 503 can mean a Custom App upload is still processing. The
+provider previously attempted its first Library Item write immediately after S3
+accepted a source upload. Iru's first-party irupkg workflow instead waits five
+seconds at that boundary. The provider now includes that cancellation-aware
+initial grace, tested locally; it is not a readiness guarantee or a live-proven
+resolution. Two inactive test creates returned HTTP 503; subsequent complete
+inventory/state reconciliation found no Library Item from either attempt.
+
+The checked public Custom App API lists no upload-readiness GET. The IPA status
+route is a different contract. A 503 alone does not establish that a write was
+side-effect-free, and free-form response details were deliberately not retained
+from those live failures. Do not describe them as a confirmed service outage or
+automatically replay a write. A verified operation-specific processing response
+and duplicate-prevention contract would be needed for a bounded write retry.
+References: [API response codes](https://api-docs.iru.com/) and
+[first-party irupkg workflow](https://github.com/kandji-inc/irupkg/blob/3fe1ec778c9e9fe7e7f7308dc8785c90e431df68/src/irupkg/helpers/utils.py).
+
 ## Verification requirement
 
 Clarified documentation permits implementation; it does not prove acceptance.
