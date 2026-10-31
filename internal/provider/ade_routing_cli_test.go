@@ -155,7 +155,7 @@ func TestTerraformCLIADEIntegrationRouting(t *testing.T) {
 	config(true, 1, false)
 	run(0, "apply", "-auto-approve", "-no-color")
 	run(0, "plan", "-no-color", "-detailed-exitcode")
-	run(0, "destroy", "-auto-approve", "-no-color")
+	run(1, "destroy", "-auto-approve", "-no-color")
 	for _, blueprint := range []string{"", syntheticNoteDevice} {
 		write(fmt.Sprintf("resource \"iru_ade_integration\" \"example\" {\n use_blueprint_routing = true\n blueprint_id = %q\n email = \"synthetic@example.invalid\"\n phone = \"1234567890\"\n}\n", blueprint))
 		run(1, "validate", "-no-color")

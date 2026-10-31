@@ -37,6 +37,7 @@ var (
 	_ resource.ResourceWithConfigure      = &ADEIntegrationResource{}
 	_ resource.ResourceWithImportState    = &ADEIntegrationResource{}
 	_ resource.ResourceWithValidateConfig = &ADEIntegrationResource{}
+	_ resource.ResourceWithModifyPlan     = &ADEIntegrationResource{}
 )
 
 func NewADEIntegrationResource() resource.Resource { return &ADEIntegrationResource{} }
@@ -44,7 +45,7 @@ func (*ADEIntegrationResource) Metadata(_ context.Context, req resource.Metadata
 	resp.TypeName = req.ProviderTypeName + "_ade_integration"
 }
 func (*ADEIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schema.Schema{MarkdownDescription: "Manages an Apple Automated Device Enrollment integration and renewal of its Apple server token. Import by integration UUID. Creation and renewal require an Apple Business Manager token. Deleting an integration can affect device enrollment. Requires Terraform 1.11 or later for write-only token input.", Attributes: map[string]schema.Attribute{
+	resp.Schema = schema.Schema{MarkdownDescription: "Manages an Apple Automated Device Enrollment integration and renewal of its Apple server token. Import by integration UUID. Creation and renewal require an Apple Business Manager token. Deletion is blocked because the Iru endpoint unassigns associated devices and the provider cannot verify a safe conditional deletion. Retain the remote integration when removing Terraform management. Requires Terraform 1.11 or later for write-only token input.", Attributes: map[string]schema.Attribute{
 		"id":                    schema.StringAttribute{Computed: true, MarkdownDescription: "ADE integration UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 		"blueprint_id":          schema.StringAttribute{Optional: true, MarkdownDescription: "Default Blueprint UUID. Required unless use_blueprint_routing=true; omit when using routing."},
 		"use_blueprint_routing": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Use Blueprint Routing for enrollment. Defaults to false; true requires blueprint_id to be omitted. Set both assignment choices to match the integration before importing."},
@@ -210,19 +211,17 @@ func (r *ADEIntegrationResource) Update(ctx context.Context, req resource.Update
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, adeState(value, data))...)
 }
-func (r *ADEIntegrationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data adeModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
+
+const adeDeletionBlocked = "Iru ADE integration deletion unassigns associated devices. A safe conditional deletion contract has not been verified, so the provider refuses DELETE and retains Terraform state. Review device associations outside Terraform. To retain the integration and stop managing it, use a removed block with lifecycle { destroy = false }."
+
+func (*ADEIntegrationResource) ModifyPlan(_ context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if !req.State.Raw.IsNull() && req.Plan.Raw.IsNull() {
+		resp.Diagnostics.AddError("ADE integration deletion blocked", adeDeletionBlocked)
 	}
-	if r.client == nil {
-		resp.Diagnostics.AddError("Iru client unavailable", "Configure the provider before deleting an ADE integration.")
-		return
-	}
-	if err := r.client.DeleteADEIntegration(ctx, data.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to delete Iru ADE integration", err.Error())
-	}
+}
+
+func (*ADEIntegrationResource) Delete(_ context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
+	resp.Diagnostics.AddError("ADE integration deletion blocked", adeDeletionBlocked)
 }
 func (*ADEIntegrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	if !client.ValidID(req.ID) {

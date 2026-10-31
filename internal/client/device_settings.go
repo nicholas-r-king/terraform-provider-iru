@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -60,6 +61,10 @@ func nullableSetting(fields map[string]json.RawMessage, key string, uuid bool) (
 	return &value, nil
 }
 func decodeDeviceSettings(data []byte, id string, ade bool) (DeviceSettings, error) {
+	return decodeDeviceRecord(data, id, ade, false)
+}
+
+func decodeDeviceRecord(data []byte, id string, ade, metadataOnly bool) (DeviceSettings, error) {
 	var result DeviceSettings
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(data, &fields) != nil {
@@ -83,7 +88,20 @@ func decodeDeviceSettings(data []byte, id string, ade bool) (DeviceSettings, err
 		return result, err
 	}
 	if ade {
-		result.UserID, err = nullableSetting(fields, "user_id", true)
+		// The live ADE detail API can return a legacy positive numeric user ID,
+		// although its documented write contract requires a directory UUID. Only
+		// metadata reads preserve that exact decimal identity. Settings management
+		// must not guess a UUID mapping or send the legacy value in a PATCH.
+		if raw := fields["user_id"]; metadataOnly && len(raw) > 0 && raw[0] >= '0' && raw[0] <= '9' {
+			legacy, parseErr := strconv.ParseUint(string(raw), 10, 64)
+			if parseErr != nil || legacy == 0 {
+				return result, errors.New("Iru returned invalid legacy ADE user identity (content withheld)")
+			}
+			value := strconv.FormatUint(legacy, 10)
+			result.UserID = &value
+		} else {
+			result.UserID, err = nullableSetting(fields, "user_id", true)
+		}
 		if err != nil {
 			return result, err
 		}
@@ -213,6 +231,16 @@ func ValidateDevicePatch(fields map[string]any, ade bool) error {
 	return nil
 }
 func (c *Client) GetDeviceSettings(ctx context.Context, id string, ade bool) (DeviceSettings, error) {
+	return c.getDeviceRecord(ctx, id, ade, false)
+}
+
+// GetDeviceMetadata reads the assignment projection without authorizing settings
+// writes. ADE legacy numeric user identities remain distinct from directory UUIDs.
+func (c *Client) GetDeviceMetadata(ctx context.Context, id string, ade bool) (DeviceSettings, error) {
+	return c.getDeviceRecord(ctx, id, ade, true)
+}
+
+func (c *Client) getDeviceRecord(ctx context.Context, id string, ade, metadataOnly bool) (DeviceSettings, error) {
 	endpoint, err := deviceSettingsPath(id, ade)
 	if err != nil {
 		return DeviceSettings{}, err
@@ -221,7 +249,7 @@ func (c *Client) GetDeviceSettings(ctx context.Context, id string, ade bool) (De
 	if err != nil {
 		return DeviceSettings{}, err
 	}
-	return decodeDeviceSettings(data, id, ade)
+	return decodeDeviceRecord(data, id, ade, metadataOnly)
 }
 func (c *Client) UpdateDeviceSettings(ctx context.Context, id string, ade bool, fields map[string]any) (DeviceSettings, error) {
 	endpoint, err := deviceSettingsPath(id, ade)

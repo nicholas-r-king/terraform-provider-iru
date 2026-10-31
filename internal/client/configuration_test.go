@@ -139,6 +139,30 @@ func TestTagUnsafeAndIncompleteListings(t *testing.T) {
 	}
 }
 
+func TestTagAbsenceRequiresCompletedPagesNotCollection404(t *testing.T) {
+	for _, laterPage := range []bool{false, true} {
+		calls := 0
+		c := testClient(t, func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.Method != http.MethodGet {
+				t.Fatal("Tag absence lookup wrote to API")
+			}
+			if laterPage && calls == 1 {
+				return response(200, `{"results":[{"id":"`+testID+`","name":"Synthetic"}],"next":"?offset=1"}`), nil
+			}
+			return response(404, `{"private":"synthetic-private-response"}`), nil
+		})
+		_, err := c.GetTag(context.Background(), testID)
+		if err == nil || IsTagAbsent(err) || strings.Contains(err.Error(), "synthetic-private") {
+			t.Fatal("failed collection/page was interpreted as absent Tag")
+		}
+	}
+	c := testClient(t, func(*http.Request) (*http.Response, error) { return response(200, `{"results":[],"next":null}`), nil })
+	if _, err := c.GetTag(context.Background(), testID); !IsTagAbsent(err) || !IsNotFound(err) {
+		t.Fatal("completed missing lookup did not prove absence")
+	}
+}
+
 func TestConfigurationWritesNeverReplayAndRedact(t *testing.T) {
 	for _, status := range []int{400, 403, 429, 503} {
 		calls := 0

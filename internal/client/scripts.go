@@ -94,7 +94,7 @@ func (c *Client) CreateScript(ctx context.Context, input ScriptInput) (Script, e
 	}
 	// An absent remediation script is optional on creation. Do not submit an
 	// empty value to serializers that reject blank optional script fields.
-	// PATCH still sends an explicit empty string to request removal.
+	// Clearing nonempty remediation is guarded below after live API rejection.
 	var remediation *string
 	if input.RemediationScript != "" {
 		remediation = &input.RemediationScript
@@ -135,6 +135,9 @@ func (c *Client) UpdateScript(ctx context.Context, id string, input ScriptInput,
 	if len(prior) > 1 {
 		return Script{}, errors.New("script update accepts at most one prior state")
 	}
+	if len(prior) == 1 && prior[0].RemediationScript != "" && input.RemediationScript == "" {
+		return Script{}, errors.New(RemediationClearUnsupported)
+	}
 	var payload any = input
 	if len(prior) == 1 {
 		payload = scriptChanges(input, prior[0])
@@ -151,7 +154,7 @@ func (c *Client) UpdateScript(ctx context.Context, id string, input ScriptInput,
 }
 
 // Keep a valid nonblank name as the stable metadata field. Unchanged optional
-// content/flags are omitted; changed empty remediation is an explicit clear.
+// content/flags are omitted. Unsupported remediation clearing is refused before transport.
 func scriptChanges(input, prior ScriptInput) map[string]any {
 	fields := map[string]any{"name": input.Name}
 	if input.Script != prior.Script {
@@ -193,3 +196,7 @@ func (c *Client) DeleteScript(ctx context.Context, id string) error {
 	}
 	return err
 }
+
+// RemediationClearUnsupported records a live-verified API limitation, not a
+// license to replace/delete a Library Item or guess undocumented null semantics.
+const RemediationClearUnsupported = "Clearing existing remediation content is currently unsupported: the live Iru API rejects an empty remediation_script. Retain the current content until a verified clearing contract is available. The provider will not replace or delete the Script to clear this field."

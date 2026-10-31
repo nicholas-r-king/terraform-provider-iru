@@ -32,6 +32,14 @@ remote installer hash is drift. If Iru omits the hash but changes the file key,
 a managed local source is conservatively uploaded again rather than assuming
 that its bytes still match.
 
+After a verified local-source upload, the provider waits five seconds before
+the first Library Item write, matching Iru's
+[irupkg upload flow](https://github.com/kandji-inc/irupkg/blob/3fe1ec778c9e9fe7e7f7308dc8785c90e431df68/src/irupkg/helpers/utils.py).
+This grace period does not prove processing readiness. Custom Apps have no
+documented upload-status endpoint in the reviewed public API; the separate IPA
+status endpoint must not be guessed for Custom Apps. The grace period is locally
+tested and has not yet been validated against a live Custom App upload.
+
 Create/update are never automatically replayed, including HTTP 503 while an
 installer may be processing. After an ambiguous creation failure, inspect Iru
 and import any existing Library Item before retrying. A valid returned UUID is

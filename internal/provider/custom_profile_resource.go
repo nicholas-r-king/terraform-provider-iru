@@ -90,9 +90,13 @@ func (*CustomProfileResource) ValidateConfig(ctx context.Context, req resource.V
 	}
 }
 
-func profileState(profile client.Profile) profileModel {
-	return profileModel{ID: types.StringValue(profile.ID), Name: types.StringValue(profile.Name), Profile: types.StringValue(profile.Profile), MDMIdentifier: types.StringValue(profile.MDMIdentifier),
+func profileState(profile client.Profile, prior ...profileModel) profileModel {
+	data := profileModel{ID: types.StringValue(profile.ID), Name: types.StringValue(profile.Name), Profile: types.StringValue(profile.Profile), MDMIdentifier: types.StringValue(profile.MDMIdentifier),
 		Active: types.BoolValue(profile.Active), RunsOnMac: types.BoolValue(profile.RunsOnMac), RunsOnIphone: types.BoolValue(profile.RunsOnIphone), RunsOnIpad: types.BoolValue(profile.RunsOnIpad), RunsOnTV: types.BoolValue(profile.RunsOnTV), RunsOnVision: types.BoolValue(profile.RunsOnVision)}
+	if len(prior) == 1 && !prior[0].Profile.IsNull() && !prior[0].Profile.IsUnknown() && client.ProfileSourceEquivalent(prior[0].Profile.ValueString(), profile) {
+		data.Profile = prior[0].Profile
+	}
+	return data
 }
 
 func (r *CustomProfileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -114,7 +118,7 @@ func (r *CustomProfileResource) Create(ctx context.Context, req resource.CreateR
 		resp.Diagnostics.AddError("Unable to create Iru Custom Profile", err.Error()+" Inspect/import any created item before retrying. A failed creation may be tainted.")
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, profileState(created))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, profileState(created, data))...)
 }
 
 func (r *CustomProfileResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -136,7 +140,7 @@ func (r *CustomProfileResource) Read(ctx context.Context, req resource.ReadReque
 		resp.Diagnostics.AddError("Unable to read Iru Custom Profile", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, profileState(profile))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, profileState(profile, data))...)
 }
 
 func (r *CustomProfileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -155,7 +159,7 @@ func (r *CustomProfileResource) Update(ctx context.Context, req resource.UpdateR
 		resp.Diagnostics.AddError("Unable to update Iru Custom Profile", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, profileState(profile))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, profileState(profile, data))...)
 }
 
 func (r *CustomProfileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

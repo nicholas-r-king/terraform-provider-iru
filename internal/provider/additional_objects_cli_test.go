@@ -310,5 +310,10 @@ func TestTerraformCLIADEIntegration(t *testing.T) {
 	}
 	mu.Unlock()
 	config("9876543210", 1, false)
-	run(0, "destroy", "-auto-approve", "-no-color")
+	if output := run(1, "destroy", "-auto-approve", "-no-color"); !strings.Contains(output, "ADE integration deletion blocked") {
+		t.Fatal("ADE delete not refused")
+	}
+	if !strings.Contains(run(0, "state", "list"), "iru_ade_integration.example") {
+		t.Fatal("blocked ADE deletion lost state")
+	}
 }

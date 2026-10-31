@@ -8,8 +8,9 @@ HashiCorp Terraform Plugin Framework. Resources include `iru_custom_script` and
 It also manages `iru_blueprint` metadata/enrollment settings, `iru_tag`,
 `iru_in_house_app` (using a validated key or local IPA), `iru_ade_integration`
 (including Apple token renewal), and `iru_device_note`.
-Assignment Map nodes, parameters, and Library Item/device assignments are not
-managed. The `iru_inventory` data source lists UUID/name metadata for eight
+`iru_blueprint_library_item_assignment` manages one classic Blueprint root
+membership; it is locally tested and still requires live acceptance. Assignment
+Map nodes/parameters are not managed. The `iru_inventory` data source lists UUID/name metadata for eight
 configuration object families, including Self Service categories.
 See [API coverage](API_COVERAGE.md) for the remaining API gaps.
 
@@ -22,10 +23,12 @@ and manage only configured assignment metadata through GET/PATCH. Destroy retain
 the devices and their settings. Exact-UUID `iru_device`, `iru_ade_device`, and
 `iru_user` lookups support selecting existing assignments; they perform no writes.
 
-This is a development provider. Real Iru compatibility has not been
-acceptance-tested. CI checks synthetic unit, Framework and Terraform CLI behavior
-on Linux and macOS; check the commit's results before using a build. No Registry
-release or installable published version exists yet.
+This remains experimental. A [published preview](https://registry.terraform.io/providers/nicholas-r-king/iru/0.1.0-alpha.1)
+exists, but it predates the draft safety/compatibility fixes and new assignment
+resource. Selected resource lifecycles and metadata reads have live evidence;
+full field, assignment, enrollment and device-delivery acceptance remains
+incomplete. See [API coverage](API_COVERAGE.md), inspect the exact commit's CI and
+plan, and do not treat a mock or schema pass as production readiness.
 
 ## Configuration and examples
 

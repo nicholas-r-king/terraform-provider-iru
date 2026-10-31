@@ -24,21 +24,18 @@ func TestScriptMetadataPatchOmitsUnchangedOptionalFields(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func TestScriptChangedRemediationClearIsExplicit(t *testing.T) {
+func TestScriptChangedRemediationClearRefusesBeforeTransport(t *testing.T) {
 	prior := fixtureInput()
 	prior.RemediationScript = "#!/bin/sh\nexit 0\n"
 	input := prior
 	input.RemediationScript = ""
+	calls := 0
 	c := testClient(t, func(req *http.Request) (*http.Response, error) {
-		var fields map[string]any
-		_ = json.NewDecoder(req.Body).Decode(&fields)
-		if value, present := fields["remediation_script"]; !present || value != "" || len(fields) != 2 {
-			t.Fatal("changed remediation clearing was omitted")
-		}
+		calls++
 		return response(200, fixtureJSON(t, input)), nil
 	})
-	if _, err := c.UpdateScript(context.Background(), testID, input, prior); err != nil {
-		t.Fatal(err)
+	if _, err := c.UpdateScript(context.Background(), testID, input, prior); err == nil || calls != 0 {
+		t.Fatal("unsupported remediation clear reached transport")
 	}
 }
 func TestAppCreateOmitsAbsentOptionalContent(t *testing.T) {

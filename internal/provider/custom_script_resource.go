@@ -22,6 +22,7 @@ var (
 	_ resource.ResourceWithConfigure      = &CustomScriptResource{}
 	_ resource.ResourceWithImportState    = &CustomScriptResource{}
 	_ resource.ResourceWithValidateConfig = &CustomScriptResource{}
+	_ resource.ResourceWithModifyPlan     = &CustomScriptResource{}
 )
 
 type CustomScriptResource struct{ client *client.Client }
@@ -52,7 +53,7 @@ func (*CustomScriptResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"id":                       schema.StringAttribute{Computed: true, MarkdownDescription: "Library Item UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"name":                     schema.StringAttribute{Required: true, MarkdownDescription: "Display name."},
 			"script":                   schema.StringAttribute{Required: true, Sensitive: true, MarkdownDescription: "Audit script content. Stored in Terraform state; do not embed secrets."},
-			"remediation_script":       schema.StringAttribute{Optional: true, Computed: true, Sensitive: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Remediation content; empty string removes it. Stored in Terraform state."},
+			"remediation_script":       schema.StringAttribute{Optional: true, Computed: true, Sensitive: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Remediation content. Omitted on creation when absent; clearing existing content is currently unsupported. Stored in Terraform state."},
 			"execution_frequency":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("once"), MarkdownDescription: "once, every_15_min, every_day, or no_enforcement. no_enforcement requires Self Service and a category."},
 			"active":                   schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Whether the Library Item is active. Defaults to false."},
 			"restart":                  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Whether to restart after running. Defaults to false."},
@@ -258,4 +259,19 @@ func (*CustomScriptResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strings.ToLower(req.ID))...)
+}
+
+func (*CustomScriptResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var before, after scriptModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &before)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &after)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !before.RemediationScript.IsUnknown() && before.RemediationScript.ValueString() != "" && !after.RemediationScript.IsUnknown() && after.RemediationScript.ValueString() == "" {
+		resp.Diagnostics.AddError("Remediation clearing unsupported", client.RemediationClearUnsupported)
+	}
 }

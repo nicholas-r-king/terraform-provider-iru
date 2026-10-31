@@ -175,9 +175,26 @@ func TestTerraformCLIBlueprint(t *testing.T) {
 	mu.Unlock()
 	run(2, "plan", "-no-color", "-detailed-exitcode")
 	run(0, "apply", "-auto-approve", "-no-color")
-	run(0, "destroy", "-auto-approve", "-no-color")
+	if output := run(1, "plan", "-destroy", "-no-color"); !strings.Contains(output, "Blueprint deletion blocked") {
+		t.Fatal("destroy plan did not explain device unmanagement")
+	}
+	if output := run(1, "destroy", "-auto-approve", "-no-color"); !strings.Contains(output, "Blueprint deletion blocked") {
+		t.Fatal("destroy was not refused")
+	}
+	if !strings.Contains(run(0, "state", "list"), "iru_blueprint.example") {
+		t.Fatal("blocked deletion lost state")
+	}
+	for _, change := range []string{`type = "classic"`, `type = "map"
+ source_type = "template"
+ source_id = "1"`} {
+		write("resource \"iru_blueprint\" \"example\" {\n name = \"Synthetic renamed\"\n" + change + "\n}\n")
+		if output := run(1, "plan", "-no-color"); !strings.Contains(output, "Blueprint replacement blocked") {
+			t.Fatal("destructive replacement not rejected")
+		}
+	}
+	config("Synthetic renamed")
 	mu.Lock()
-	if posts != 1 || patches != 2 || deletes != 1 {
+	if posts != 1 || patches != 2 || deletes != 0 {
 		t.Errorf("unexpected lifecycle counts: %d/%d/%d", posts, patches, deletes)
 	}
 	mu.Unlock()

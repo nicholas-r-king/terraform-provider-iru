@@ -36,6 +36,7 @@ var (
 	_ resource.ResourceWithConfigure      = &BlueprintResource{}
 	_ resource.ResourceWithImportState    = &BlueprintResource{}
 	_ resource.ResourceWithValidateConfig = &BlueprintResource{}
+	_ resource.ResourceWithModifyPlan     = &BlueprintResource{}
 )
 
 func NewBlueprintResource() resource.Resource { return &BlueprintResource{} }
@@ -43,7 +44,7 @@ func (*BlueprintResource) Metadata(_ context.Context, req resource.MetadataReque
 	resp.TypeName = req.ProviderTypeName + "_blueprint"
 }
 func (*BlueprintResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schema.Schema{MarkdownDescription: "Manages Blueprint metadata and manual enrollment settings. Can create empty classic/Assignment Map Blueprints or clone a documented source. Map nodes, parameters, Library Item assignments, and Blueprint routing rules are not managed. Import by UUID; match the existing type explicitly. Deletion permanently removes the Blueprint.", Attributes: map[string]schema.Attribute{
+	resp.Schema = schema.Schema{MarkdownDescription: "Manages Blueprint metadata and manual enrollment settings. Can create empty classic/Assignment Map Blueprints or clone a documented source. Map nodes, parameters, Library Item assignments, and Blueprint routing rules are not managed. Import by UUID; match the existing type explicitly. Deletion and replacement are blocked: the Iru deletion endpoint unmanages all assigned devices and no atomic empty-Blueprint deletion contract has been verified. Remove Terraform management with a removed block using destroy=false when intentionally retaining the Blueprint.", Attributes: map[string]schema.Attribute{
 		"id":                schema.StringAttribute{Computed: true, MarkdownDescription: "Blueprint UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 		"name":              schema.StringAttribute{Required: true, MarkdownDescription: "Unique Blueprint name."},
 		"type":              schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("classic"), MarkdownDescription: "classic or map. Changing type requires replacement.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
@@ -178,19 +179,35 @@ func (r *BlueprintResource) Update(ctx context.Context, req resource.UpdateReque
 	data = blueprintState(value, data)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
-func (r *BlueprintResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data blueprintModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+// Refuse in both planning and application. The apply-time check also protects
+// saved plans created by an older provider; a preflight count would have a race
+// with a new device assignment before DELETE and is not an atomic safeguard.
+func (*BlueprintResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() {
+		return
+	}
+	if req.Plan.Raw.IsNull() {
+		resp.Diagnostics.AddError("Blueprint deletion blocked", blueprintDeletionBlocked)
+		return
+	}
+	var before, after blueprintModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &before)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &after)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if r.client == nil {
-		resp.Diagnostics.AddError("Iru client unavailable", "Configure the provider before deleting a Blueprint.")
-		return
+	if (!after.Type.IsUnknown() && !before.Type.Equal(after.Type)) ||
+		(!after.SourceType.IsUnknown() && !before.SourceType.Equal(after.SourceType)) ||
+		(!after.SourceID.IsUnknown() && !before.SourceID.Equal(after.SourceID)) {
+		resp.Diagnostics.AddError("Blueprint replacement blocked", blueprintDeletionBlocked+" Keep type and clone-source inputs unchanged. Imported Blueprints cannot recover clone provenance; omit source_type and source_id after import.")
 	}
-	if err := r.client.DeleteBlueprint(ctx, data.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to delete Iru Blueprint", err.Error())
-	}
+}
+
+const blueprintDeletionBlocked = "Iru Blueprint deletion unmanages all assigned devices. The provider cannot verify an atomic empty-Blueprint deletion, so it refuses DELETE and retains Terraform state. Move or reconcile dependencies and review deletion outside Terraform. To retain the remote Blueprint and stop managing it, use a removed block with lifecycle { destroy = false }."
+
+func (*BlueprintResource) Delete(_ context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
+	resp.Diagnostics.AddError("Blueprint deletion blocked", blueprintDeletionBlocked)
 }
 func (*BlueprintResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	if !client.ValidID(req.ID) {

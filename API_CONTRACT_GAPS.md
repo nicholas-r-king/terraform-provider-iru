@@ -3,7 +3,7 @@
 # Contracts needed for complete configuration migration
 
 These questions identify missing or contradictory public API evidence. They are
-not claims that no additional API exists. Sources were checked on 2026-10-29:
+not claims that no additional API exists. The public collection was rechecked on 2026-10-31; earlier permission-UI findings remain attributed to their recorded review:
 [rendered reference](https://api-docs.iru.com/) and its
 [published Postman collection](https://api-docs.iru.com/api/collections/15284493/TzCTZkBe?segregateAuth=true&versionTag=latest).
 No tenant data or credentials are needed to clarify these contracts.
@@ -24,17 +24,19 @@ The membership GET request (`34af40a5-7273-425c-9ea5-2c8a5dbbe29f`)
 returns Library Item ID/name entries, without node IDs. It can verify Blueprint
 membership but cannot prove a particular Assignment Map node placement.
 
-Required evidence:
+First-party permission UI inspection on 2026-10-31 verifies the distinct removal
+route as `POST /api/v1/blueprints/{blueprint_id}/remove-library-item`. The documented
+body supplies `library_item_id` and, for map nodes, `assignment_node_id`; examples
+return UUID arrays. The classic-root resource omits node placement, verifies the
+Blueprint type and complete list before/after writes, and avoids a POST when the
+desired membership already holds. It does not infer membership from a success
+array, guess DELETE, or treat collection404 as an absent pair. Live convergence,
+processing/propagation and error semantics remain unverified for this new resource.
 
-- The distinct removal method/path and exact payload, successful response, and
-  already-absent behavior for classic Blueprints and Assignment Maps.
-- A supported read endpoint exposing each Library Item's assignment-node
-  placements, with pagination, identity and propagation semantics.
-- If no node-level read exists, the supported import/drift contract for a
-  declarative assignment integration.
-
-The provider does not guess a removal route, treat assignment as a toggle, or
-claim node-specific refresh/import verification from Blueprint-wide membership.
+Still required for Assignment Maps: a supported node-aware read/import/drift/remove
+contract, including multiple placements of one item, pagination, identity and
+propagation. A flattened list cannot prove which node owns an assignment. All map
+placement is therefore refused by this resource, not falsely claimed tested.
 
 ## Built-in Library Items, parameters and map/routing definitions
 
@@ -61,12 +63,27 @@ whether omission of the override property means unsupported, unassigned or
 temporarily unavailable. Until then, override management requires an explicit
 reported field, and undocumented ADE null-clearing is refused.
 
+Live read-only validation also found an ADE detail response whose `user_id` is
+a positive JSON integer, while official read/write examples use directory UUIDs.
+The ADE data source preserves that legacy identity as a decimal string without
+mapping it to a directory UUID. Settings management still requires the documented
+UUID contract and refuses this legacy representation. Numeric user writes,
+cross-identity mapping and ADE assignment changes have not been validated.
+
 ADE integrations separately document Blueprint Routing assignment and now have
 that input/state support. The collection's saved responses and multipart bodies
 remain fixed-Blueprint examples. The provider accepts explicit documented
 routing response fields and legacy nested fixed-Blueprint metadata, and encodes
 multipart null selection as an empty field plus an explicit routing flag. Real
 create/renew/import acceptance of those representations still needs verification.
+
+## Tag collection failure versus object absence
+
+Tags have no documented detail GET. Only a completed, valid, bounded listing
+that omits the captured UUID proves the Tag absent. A collection or later-page
+HTTP404 is a failed read and must retain Terraform state, just like authorization
+failure or malformed success data. This distinction is verified with local
+Terraform fault injection; no live endpoint failure was induced.
 
 ## Detached installer artifacts
 
@@ -75,6 +92,25 @@ artifact deletion/abort/garbage-collection is not. Clarify upload lifetime,
 orphan enumeration/deletion and processing-readiness for Custom Apps. Library
 Item deletion is implemented separately and is not described as artifact cleanup.
 
+The documented HTTP 503 can mean a Custom App upload is still processing. The
+provider previously attempted its first Library Item write immediately after S3
+accepted a source upload. Iru's first-party irupkg workflow instead waits five
+seconds at that boundary. The provider now includes that cancellation-aware
+initial grace. Subsequent candidate221ac4a source-upload creation and a focused
+create/import/drift/repair/delete lifecycle passed live, with independent absence
+and empty-state reconciliation. This is not a readiness guarantee or proof of why
+earlier creates failed. Two earlier inactive test creates returned HTTP503;
+complete inventory/state reconciliation found no Library Item from either attempt.
+
+The checked public Custom App API lists no upload-readiness GET. The IPA status
+route is a different contract. A 503 alone does not establish that a write was
+side-effect-free, and free-form response details were deliberately not retained
+from those live failures. Do not describe them as a confirmed service outage or
+automatically replay a write. A verified operation-specific processing response
+and duplicate-prevention contract would be needed for a bounded write retry.
+References: [API response codes](https://api-docs.iru.com/) and
+[first-party irupkg workflow](https://github.com/kandji-inc/irupkg/blob/3fe1ec778c9e9fe7e7f7308dc8785c90e431df68/src/irupkg/helpers/utils.py).
+
 ## Verification requirement
 
 Clarified documentation permits implementation; it does not prove acceptance.
@@ -82,3 +118,29 @@ Each supported operation still needs immutable provider/caller revisions and
 actual isolated-tenant results. Passing unit, protocol or mocked CLI tests is
 not live CRUD evidence. Device enrollment and one-shot operational commands are
 distinct from ownership of configuration settings.
+
+
+## Custom Script remediation removal
+
+Live field testing on an inactive, unassigned disposable Script accepted nonempty
+remediation but rejected a subsequent empty `remediation_script` PATCH with
+HTTP 400. A verified alternative removal contract is unavailable. The vendor
+SDK filters null values to omission; its mocked repository tests assume empty
+clearing, which does not override the live rejection. Do not guess null, an
+undocumented endpoint, or replace/delete an existing Library Item to simulate a
+field clear. Planning and updates currently refuse a known nonempty-to-empty
+transition before transport; retain existing remediation until a contract is
+verified. Creation without remediation and unchanged-empty metadata updates
+remain supported.
+
+
+## Configuration read/export primitives
+
+The provider inventory currently projects UUID/name pairs, and the generic Library
+Item lookup returns membership identity/name. It does not expose complete managed
+Script/Profile/App/In-House/ADE configuration as dedicated data sources or export.
+The documented detail reads and existing client models make this an unimplemented
+provider read/export capability, rather than evidence of an absent API. Managed
+resource import can recover some state, but is not a zero-risk configuration
+migration/export substitute. Keep this gap distinct from missing parameter/map
+write contracts. See the complete [validation inventory](VALIDATION_STATUS.md).

@@ -138,6 +138,15 @@ func (c *Client) UploadInstaller(ctx context.Context, kind, filename, expectedSH
 		if err := c.waitForIPA(ctx, result); err != nil {
 			return result, err
 		}
+	} else {
+		// S3 acceptance does not establish Iru processing readiness. Match the
+		// initial five-second grace used by Iru's irupkg upload workflow before
+		// the first Library Item write. This is not a readiness probe, and does
+		// not authorize replaying a POST/PATCH that later returns HTTP 503.
+		// https://github.com/kandji-inc/irupkg/blob/3fe1ec778c9e9fe7e7f7308dc8785c90e431df68/src/irupkg/helpers/utils.py
+		if err := c.sleep(ctx, 5*time.Second); err != nil {
+			return result, errors.New("Custom App upload processing wait interrupted; no Library Item write was attempted")
+		}
 	}
 	return result, nil
 }

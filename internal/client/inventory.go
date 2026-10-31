@@ -34,7 +34,10 @@ func inventoryEndpoint(kind string) (endpoint, nameField string, array bool) {
 	case "in_house_apps":
 		return inHouseAppsPath, "name", false
 	case "ade_integrations":
-		return adePath, "server_name", false
+		// The live API redirects the collection without its trailing slash.
+		// Request the canonical collection directly; credentials must never be
+		// forwarded by enabling general redirect following.
+		return adePath + "/", "server_name", false
 	case "self_service_categories":
 		return "/api/v1/self-service/categories", "name", true
 	}
