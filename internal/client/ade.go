@@ -39,6 +39,11 @@ type ADEIntegration struct {
 	UseBlueprintRouting bool    `json:"-"`
 }
 
+func ValidADEEmail(value string) bool {
+	address, err := mail.ParseAddress(value)
+	return err == nil && address.Address == value
+}
+
 func (input ADEInput) Validate() error {
 	if input.UseBlueprintRouting {
 		if input.BlueprintID != "" {
@@ -47,8 +52,7 @@ func (input ADEInput) Validate() error {
 	} else if !ValidID(input.BlueprintID) {
 		return errors.New("ADE requires a Blueprint UUID or use_blueprint_routing=true")
 	}
-	address, err := mail.ParseAddress(input.Email)
-	if err != nil || address.Address != input.Email || strings.TrimSpace(input.Phone) == "" {
+	if !ValidADEEmail(input.Email) || strings.TrimSpace(input.Phone) == "" {
 		return errors.New("ADE requires an email address and nonblank phone")
 	}
 	return nil

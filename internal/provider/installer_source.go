@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,8 +16,8 @@ import (
 
 func validateInstallerSource(fileKey, filename, checksum types.String) error {
 	if !filename.IsNull() && !filename.IsUnknown() {
-		if strings.TrimSpace(filename.ValueString()) == "" {
-			return errors.New("source_file must not be blank")
+		if strings.TrimSpace(filename.ValueString()) == "" || strings.IndexFunc(filename.ValueString(), unicode.IsControl) >= 0 {
+			return errors.New("source_file must not be blank or contain control characters")
 		}
 		if !fileKey.IsNull() && !fileKey.IsUnknown() {
 			return errors.New("configure file_key or source_file, not both")
@@ -24,7 +25,7 @@ func validateInstallerSource(fileKey, filename, checksum types.String) error {
 		if checksum.IsNull() {
 			return errors.New("source_file requires source_sha256; use filesha256(source_file)")
 		}
-	} else if filename.IsNull() && !checksum.IsNull() {
+	} else if filename.IsNull() && !checksum.IsNull() && !checksum.IsUnknown() {
 		return errors.New("source_sha256 requires source_file")
 	}
 	if !checksum.IsNull() && !checksum.IsUnknown() && !client.ValidInstallerSHA256(checksum.ValueString()) {

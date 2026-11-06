@@ -20,12 +20,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/nicholas-r-king/terraform-provider-iru/internal/client"
 )
 
 const cliToken = "synthetic-cli-token"
+
+// Frozen-schema fixture for historical native runners. This wrapper and its
+// selector exist only in the Go test executable, never in the provider binary.
+type historicalSchemaTestProvider struct{ *IruProvider }
+
+func (p *historicalSchemaTestProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+	var selected []func() datasource.DataSource
+	for _, factory := range p.IruProvider.DataSources(ctx) {
+		var metadata datasource.MetadataResponse
+		factory().Metadata(ctx, datasource.MetadataRequest{ProviderTypeName: "iru"}, &metadata)
+		if metadata.TypeName != "iru_library_item_statuses" {
+			selected = append(selected, factory)
+		}
+	}
+	return selected
+}
 
 // The helper exists ONLY in the Go test binary. The production executable has
 // no helper flags/environment handling and always uses its normal transport.
@@ -57,7 +74,16 @@ func TestMain(m *testing.M) {
 		return direct.RoundTrip(clone)
 	})
 	factory := func() fwprovider.Provider {
-		return &IruProvider{version: "synthetic-test", httpClient: &http.Client{Transport: transport}}
+		p := &IruProvider{version: "synthetic-test", httpClient: &http.Client{Transport: transport}}
+		if mode := os.Getenv("IRU_SYNTHETIC_SCHEMA_14"); mode != "" {
+			legacy := &historicalSchemaTestProvider{p}
+			if mode != "1" || len(legacy.DataSources(context.Background())) != 14 {
+				fmt.Fprintln(os.Stderr, "invalid historical synthetic schema")
+				os.Exit(1)
+			}
+			return legacy
+		}
+		return p
 	}
 	if err := providerserver.Serve(context.Background(), factory, providerserver.ServeOpts{Address: "registry.terraform.io/nicholas-r-king/iru"}); err != nil {
 		fmt.Fprintln(os.Stderr, "synthetic provider server failed")

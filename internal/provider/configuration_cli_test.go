@@ -127,6 +127,9 @@ func TestTerraformCLIBlueprint(t *testing.T) {
 			}
 			if req.Method == "POST" {
 				posts++
+				if req.Form.Get("type") != "map" {
+					t.Error("new Blueprint did not use the current map default")
+				}
 				object = &client.ManagedBlueprint{ID: syntheticID, Type: req.Form.Get("type"), Color: "aqua-800", Icon: "ss-files"}
 				code, active := "000123", false
 				object.EnrollmentCode.Code, object.EnrollmentCode.Active = &code, &active
@@ -158,7 +161,7 @@ func TestTerraformCLIBlueprint(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(object)
 	}))
 	config := func(name string) {
-		write(fmt.Sprintf("resource \"iru_blueprint\" \"example\" {\n name = %q\n type = \"map\"\n}\n", name))
+		write(fmt.Sprintf("resource \"iru_blueprint\" \"example\" {\n name = %q\n}\n", name))
 	}
 	config("Synthetic blueprint")
 	run(0, "validate", "-no-color")

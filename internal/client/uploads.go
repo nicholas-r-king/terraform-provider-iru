@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 )
@@ -93,7 +94,16 @@ func (c *Client) UploadInstaller(ctx context.Context, kind, filename, expectedSH
 	if filename == "" || strings.IndexFunc(filename, unicode.IsControl) >= 0 {
 		return InstallerUpload{}, errors.New("installer source_file must be a local file path")
 	}
-	file, err := os.Open(filename)
+	if ctx.Err() != nil {
+		return InstallerUpload{}, errors.New("installer upload canceled before opening source_file")
+	}
+	// On the supported Darwin/Linux targets, a blocking open of a FIFO waits
+	// for a writer before Stat or the context-aware reader can reject it.
+	// O_NONBLOCK lets us inspect the opened descriptor without that rendezvous,
+	// including when a symlink or racing path resolves to a FIFO. Regular files
+	// retain the same descriptor/hash/stream behavior; a path-only Stat would
+	// leave a substitution race between validation and open.
+	file, err := os.OpenFile(filename, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return InstallerUpload{}, errors.New("could not open installer source_file (path withheld)")
 	}

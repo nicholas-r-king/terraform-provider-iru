@@ -35,7 +35,7 @@ func (*DeviceNoteResource) Metadata(_ context.Context, req resource.MetadataRequ
 func (*DeviceNoteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{MarkdownDescription: "Manages a Note on an existing enrolled device. This resource never enrolls, deletes, erases or reconfigures the device. Import using device_uuid/note_uuid.", Attributes: map[string]schema.Attribute{
 		"id":        schema.StringAttribute{Computed: true, MarkdownDescription: "Note UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-		"device_id": schema.StringAttribute{Required: true, MarkdownDescription: "Existing device UUID. Moving the Note to a different device requires replacement.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+		"device_id": schema.StringAttribute{Required: true, MarkdownDescription: "Existing device UUID. Moving the Note to a different UUID requires replacement; casing alone does not move or replace the Note.", PlanModifiers: []planmodifier.String{uuidReplacementModifier()}},
 		"content":   schema.StringAttribute{Required: true, Sensitive: true, MarkdownDescription: "Note content as returned by Iru, including HTML when present. Stored in Terraform state; avoid embedding credentials."},
 	}}
 }
@@ -108,13 +108,24 @@ func (r *DeviceNoteResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 func (r *DeviceNoteResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data deviceNoteModel
+	var data, prior deviceNoteModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	if r.client == nil || data.DeviceID.IsUnknown() || data.Content.IsUnknown() {
 		resp.Diagnostics.AddError("Device Note client or plan unavailable", "Configure the provider and resolve the device and content before update.")
+		return
+	}
+	if !strings.EqualFold(data.DeviceID.ValueString(), prior.DeviceID.ValueString()) || !data.ID.Equal(prior.ID) {
+		resp.Diagnostics.AddError("Device Note replacement required", "A different device or Note identity requires replacement. No in-place move or write was attempted.")
+		return
+	}
+	if data.Content.Equal(prior.Content) {
+		// Persist only the configured spelling of the same selector. The normal
+		// refresh already observed content; no content update was requested.
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
 	value, err := r.client.UpdateDeviceNote(ctx, data.DeviceID.ValueString(), data.ID.ValueString(), data.Content.ValueString())

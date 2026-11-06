@@ -90,6 +90,7 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 	next := path
 	pages, ids := map[string]bool{}, map[string]bool{}
 	var found *LibraryItem
+	var total paginationTotal
 	for page := 0; ; page++ {
 		if page >= 100 || pages[next] {
 			return LibraryItem{}, errors.New("Library Item pagination exceeded its safety bound or repeated a page")
@@ -100,6 +101,7 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 			return LibraryItem{}, err
 		}
 		var envelope struct {
+			Count   json.RawMessage `json:"count"`
 			Next    json.RawMessage `json:"next"`
 			Results *[]LibraryItem  `json:"results"`
 		}
@@ -119,6 +121,9 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 				copy := item
 				found = &copy
 			}
+		}
+		if err := total.observe(envelope.Count, len(ids), string(envelope.Next) == "null"); err != nil {
+			return LibraryItem{}, err
 		}
 		if string(envelope.Next) == "null" {
 			break

@@ -19,6 +19,7 @@ type DeviceSettings struct {
 	UserID               *string
 	AssetTag             *string
 	Tags                 []string
+	TagsKnown            bool
 	UseBlueprintRouting  *bool
 	OverrideDEPProfileID *string
 	OverrideKnown        bool
@@ -61,10 +62,10 @@ func nullableSetting(fields map[string]json.RawMessage, key string, uuid bool) (
 	return &value, nil
 }
 func decodeDeviceSettings(data []byte, id string, ade bool) (DeviceSettings, error) {
-	return decodeDeviceRecord(data, id, ade, false)
+	return decodeDeviceRecord(data, id, ade)
 }
 
-func decodeDeviceRecord(data []byte, id string, ade, metadataOnly bool) (DeviceSettings, error) {
+func decodeDeviceRecord(data []byte, id string, ade bool) (DeviceSettings, error) {
 	var result DeviceSettings
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(data, &fields) != nil {
@@ -88,11 +89,11 @@ func decodeDeviceRecord(data []byte, id string, ade, metadataOnly bool) (DeviceS
 		return result, err
 	}
 	if ade {
-		// The live ADE detail API can return a legacy positive numeric user ID,
-		// although its documented write contract requires a directory UUID. Only
-		// metadata reads preserve that exact decimal identity. Settings management
-		// must not guess a UUID mapping or send the legacy value in a PATCH.
-		if raw := fields["user_id"]; metadataOnly && len(raw) > 0 && raw[0] >= '0' && raw[0] <= '9' {
+		// Legacy positive numeric user IDs are observations, never writable UUIDs.
+		// Keeping their exact decimal value lets settings omit/preserve the user
+		// while managing other fields. Config/PATCH validation still requires a
+		// directory UUID; no mapping or write-back of this number is allowed.
+		if raw := fields["user_id"]; len(raw) > 0 && raw[0] >= '0' && raw[0] <= '9' {
 			legacy, parseErr := strconv.ParseUint(string(raw), 10, 64)
 			if parseErr != nil || legacy == 0 {
 				return result, errors.New("Iru returned invalid legacy ADE user identity (content withheld)")
@@ -133,14 +134,20 @@ func decodeDeviceRecord(data []byte, id string, ade, metadataOnly bool) (DeviceS
 			value := strings.ToLower(user.ID)
 			result.UserID = &value
 		}
-		raw, exists = fields["tags"]
-		if !exists || string(raw) == "null" || json.Unmarshal(raw, &result.Tags) != nil || result.Tags == nil {
-			return result, errors.New("Iru omitted a valid device tag list")
-		}
-		if err := validateDeviceTags(result.Tags); err != nil {
-			return result, errors.New("Iru returned invalid device tags (content withheld)")
-		}
 	}
+	// ADE tags are an optional observed field. Absence is unknown, distinct
+	// from an empty list; enrolled-device responses must always include it.
+	raw, exists := fields["tags"]
+	if ade && !exists {
+		return result, nil
+	}
+	if !exists || string(raw) == "null" || json.Unmarshal(raw, &result.Tags) != nil || result.Tags == nil {
+		return result, errors.New("Iru omitted a valid device tag list")
+	}
+	if err := validateDeviceTags(result.Tags); err != nil {
+		return result, errors.New("Iru returned invalid device tags (content withheld)")
+	}
+	result.TagsKnown = true
 	return result, nil
 }
 func validateDeviceTags(tags []string) error {
@@ -190,9 +197,6 @@ func ValidateDevicePatch(fields map[string]any, ade bool) error {
 				return errors.New("asset_tag must be a string; use documented clearing semantics")
 			}
 		case "tags":
-			if ade {
-				return errors.New("ADE device tag updates are not documented")
-			}
 			v, ok := value.([]string)
 			if !ok || v == nil {
 				return errors.New("tags must be an explicit list, including [] to clear")
@@ -231,16 +235,16 @@ func ValidateDevicePatch(fields map[string]any, ade bool) error {
 	return nil
 }
 func (c *Client) GetDeviceSettings(ctx context.Context, id string, ade bool) (DeviceSettings, error) {
-	return c.getDeviceRecord(ctx, id, ade, false)
+	return c.getDeviceRecord(ctx, id, ade)
 }
 
 // GetDeviceMetadata reads the assignment projection without authorizing settings
 // writes. ADE legacy numeric user identities remain distinct from directory UUIDs.
 func (c *Client) GetDeviceMetadata(ctx context.Context, id string, ade bool) (DeviceSettings, error) {
-	return c.getDeviceRecord(ctx, id, ade, true)
+	return c.getDeviceRecord(ctx, id, ade)
 }
 
-func (c *Client) getDeviceRecord(ctx context.Context, id string, ade, metadataOnly bool) (DeviceSettings, error) {
+func (c *Client) getDeviceRecord(ctx context.Context, id string, ade bool) (DeviceSettings, error) {
 	endpoint, err := deviceSettingsPath(id, ade)
 	if err != nil {
 		return DeviceSettings{}, err
@@ -249,7 +253,7 @@ func (c *Client) getDeviceRecord(ctx context.Context, id string, ade, metadataOn
 	if err != nil {
 		return DeviceSettings{}, err
 	}
-	return decodeDeviceRecord(data, id, ade, metadataOnly)
+	return decodeDeviceRecord(data, id, ade)
 }
 func (c *Client) UpdateDeviceSettings(ctx context.Context, id string, ade bool, fields map[string]any) (DeviceSettings, error) {
 	endpoint, err := deviceSettingsPath(id, ade)

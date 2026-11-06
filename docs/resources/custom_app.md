@@ -19,6 +19,15 @@ never sent to S3, and signed upload credentials are not stored in state.
 Metadata-only updates retain the existing installer; changing the configured
 checksum uploads new bytes and replaces its reference in place.
 
+Local `source_file` uploads are limited to **5 GiB by this provider**. This uses
+the existing signed S3 form workflow. The current
+[Iru Mac Custom App guide](https://docs.iru.com/en/endpoint/library/library-items-profiles/configure-the-custom-apps-library-item)
+advertises a 30 GB UI limit, but that larger upload workflow is not implemented
+or verified here. Do not assume the UI limit applies to this provider's upload
+API path or simply raise the local bound without a supported contract.
+The UI's During/After Liftoff timing setting is not modeled by this resource or
+the configuration data source; its supported read/write API contract is unverified.
+
 Creation omits absent optional script/location fields. Updates retain a nonblank
 name and omit unchanged optional fields rather than resending blank defaults.
 Changed empty script values still request clearing, and installer replacement
@@ -37,8 +46,7 @@ the first Library Item write, matching Iru's
 [irupkg upload flow](https://github.com/kandji-inc/irupkg/blob/3fe1ec778c9e9fe7e7f7308dc8785c90e431df68/src/irupkg/helpers/utils.py).
 This grace period does not prove processing readiness. Custom Apps have no
 documented upload-status endpoint in the reviewed public API; the separate IPA
-status endpoint must not be guessed for Custom Apps. The grace period is locally
-tested and has not yet been validated against a live Custom App upload.
+status endpoint must not be guessed for Custom Apps.
 
 Create/update are never automatically replayed, including HTTP 503 while an
 installer may be processing. After an ambiguous creation failure, inspect Iru
@@ -53,10 +61,19 @@ enforcement requires an audit script; `no_enforcement` requires Self Service and
 an existing category UUID. Hidden category clearing is not assumed. Scripts are
 sensitive in displays but remain in state. Destroy permanently deletes the
 Library Item and can affect external assignments. Consider Terraform
-`prevent_destroy` where appropriate. Real tenant compatibility remains unverified.
-Iru can strip outer script whitespace. Known configured spelling is retained for
-equivalent responses; substantive changes remain drift. Imported scripts should
-match the returned content for the first no-op plan.
+`prevent_destroy` where appropriate.
+Only the observed removal of final CR/LF characters is treated as equivalent
+script spelling. Leading whitespace and spaces/tabs remain meaningful drift.
+Imported scripts should match returned content for the first no-op plan.
+
+Installer keys are sensitive in normal Terraform displays, matching the
+configuration lookups, because they can reveal private paths and names. This is
+redaction, not encryption: keys remain in state and machine-readable plan/state
+JSON. Outputs exposing `file_key` must declare `sensitive = true`; it cannot be
+used as a `for_each` instance key. Use stable public labels for addressing and
+review dependent expressions before upgrading. Existing installer values and
+state schema are unchanged; a refresh can persist the new sensitivity metadata
+without an API write or object replacement.
 
 ## Example Usage
 
@@ -97,7 +114,7 @@ resource "iru_custom_app" "local_installer" {
 
 - `active` (Boolean) Whether the item is active and installable. Defaults to false.
 - `audit_script` (String, Sensitive) Audit script for continuously_enforce only. Content remains in state.
-- `file_key` (String) Existing uploaded installer key, or the result of a source_file upload. Configure either this or source_file at creation. Omit both to adopt an imported item's key.
+- `file_key` (String, Sensitive) Existing uploaded installer key, or the result of a source_file upload. Configure either this or source_file at creation. Omit both to adopt an imported item's key. Sensitive in displays because keys may reveal private paths/names; retained in state.
 - `install_enforcement` (String) install_once, continuously_enforce, or no_enforcement. Continuous enforcement requires audit_script; no enforcement requires Self Service and a category.
 - `postinstall_script` (String, Sensitive) Postinstall script; empty string clears it. Content remains in state.
 - `preinstall_script` (String, Sensitive) Preinstall script; empty string clears it. Content remains in state.

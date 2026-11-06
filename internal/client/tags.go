@@ -73,6 +73,7 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 	next := tagsPath
 	pages, ids := map[string]bool{}, map[string]bool{}
 	var found *Tag
+	var total paginationTotal
 	for page := 0; ; page++ {
 		if page >= 100 || pages[next] {
 			return Tag{}, errors.New("Tag pagination exceeded its bound or repeated a page")
@@ -83,6 +84,7 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 			return Tag{}, err
 		}
 		var envelope struct {
+			Count   json.RawMessage `json:"count"`
 			Next    json.RawMessage `json:"next"`
 			Results *[]Tag          `json:"results"`
 		}
@@ -102,6 +104,9 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 				copy := tag
 				found = &copy
 			}
+		}
+		if err := total.observe(envelope.Count, len(ids), string(envelope.Next) == "null"); err != nil {
+			return Tag{}, err
 		}
 		if string(envelope.Next) == "null" {
 			break

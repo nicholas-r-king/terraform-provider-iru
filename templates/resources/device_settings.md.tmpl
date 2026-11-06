@@ -14,6 +14,12 @@ This resource adopts an already enrolled device. Omitted fields are observed but
 
 A successful PATCH is followed by GET and configured-value verification. Permission/read errors retain prior state, and ambiguous writes are not replayed. A verified 404 removes the settings mapping from state but cannot re-enroll or recreate a missing device.
 
+A different `device_id` UUID replaces only the settings projection. UUID casing
+alone is an in-place spelling update with no API write. On a real selector change,
+omitted settings are observed from the new record; the prior record's observed
+values are not copied to it. Both Terraform replacement orders retain the old
+and new remote records.
+
 ## Example Usage
 
 {{ range .ExampleFiles }}
@@ -28,4 +34,4 @@ A successful PATCH is followed by GET and configured-value verification. Permiss
 {{ codefile "shell" .ImportFile }}
 {{ end }}
 
-Contract: [official Iru API](https://api-docs.iru.com/). Mock tests are not live tenant acceptance.
+Contract: [official Iru API](https://api-docs.iru.com/).

@@ -45,7 +45,7 @@ func (*InHouseAppResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	resp.Schema = schema.Schema{MarkdownDescription: "Manages an In-House App Library Item using a validated file_key or local IPA source_file/source_sha256. Local uploads must reach Iru's VALIDATED state before Library Item creation/update. Does not manage assignments or delete detached upload artifacts. Import by Library Item UUID.", Attributes: map[string]schema.Attribute{
 		"id":             schema.StringAttribute{Computed: true, MarkdownDescription: "Library Item UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 		"name":           schema.StringAttribute{Required: true, MarkdownDescription: "Library Item name."},
-		"file_key":       schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Existing validated IPA key or the result of a local upload. Configure this or source_file at creation; omit both to adopt an imported key."},
+		"file_key":       schema.StringAttribute{Optional: true, Computed: true, Sensitive: true, MarkdownDescription: "Existing validated IPA key or the result of a local upload. Configure this or source_file at creation; omit both to adopt an imported key. Sensitive in displays because keys may reveal private paths/names; retained in state."},
 		"source_file":    schema.StringAttribute{Optional: true, MarkdownDescription: "Local IPA path to upload and validate. Requires source_sha256; conflicts with a configured file_key."},
 		"source_sha256":  schema.StringAttribute{Optional: true, MarkdownDescription: "Planned IPA SHA256; use filesha256(). Verified locally and against Iru's validated upload metadata."},
 		"active":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Activate the Library Item. Defaults to false."},
@@ -79,17 +79,15 @@ func (*InHouseAppResource) ValidateConfig(ctx context.Context, req resource.Vali
 	}
 	if err := validateInstallerSource(data.FileKey, data.SourceFile, data.SourceSHA256); err != nil {
 		resp.Diagnostics.AddError("Invalid installer source", err.Error())
-		return
 	}
-	if data.unknownInput() {
-		return
+	if !data.Name.IsNull() && !data.Name.IsUnknown() && strings.TrimSpace(data.Name.ValueString()) == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Invalid In-House App name", "name must not be blank.")
 	}
-	input := data.input()
-	if data.FileKey.IsNull() || data.FileKey.IsUnknown() {
-		input.FileKey = "installer-key-resolved-at-apply"
+	if !data.FileKey.IsNull() && !data.FileKey.IsUnknown() && !client.ValidInstallerKey(data.FileKey.ValueString()) {
+		resp.Diagnostics.AddAttributeError(path.Root("file_key"), "Invalid installer key", "file_key must be nonblank and contain no control characters.")
 	}
-	if err := input.Validate(); err != nil {
-		resp.Diagnostics.AddError("Invalid In-House App configuration", err.Error())
+	if !data.RunsOnIphone.IsUnknown() && !data.RunsOnIpad.IsUnknown() && !data.RunsOnTV.IsUnknown() && !data.RunsOnIphone.ValueBool() && !data.RunsOnIpad.ValueBool() && !data.RunsOnTV.ValueBool() {
+		resp.Diagnostics.AddError("In-House App platform required", "Select at least one In-House App platform: iphone, ipad, or tv.")
 	}
 }
 func (*InHouseAppResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {

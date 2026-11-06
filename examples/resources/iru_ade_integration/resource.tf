@@ -4,4 +4,8 @@ resource "iru_ade_integration" "example" {
   phone                = "+1 555 0100"
   server_token         = filebase64("apple-server-token.p7m")
   server_token_version = 1
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }

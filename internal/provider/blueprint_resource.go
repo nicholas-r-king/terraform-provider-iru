@@ -44,10 +44,10 @@ func (*BlueprintResource) Metadata(_ context.Context, req resource.MetadataReque
 	resp.TypeName = req.ProviderTypeName + "_blueprint"
 }
 func (*BlueprintResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schema.Schema{MarkdownDescription: "Manages Blueprint metadata and manual enrollment settings. Can create empty classic/Assignment Map Blueprints or clone a documented source. Map nodes, parameters, Library Item assignments, and Blueprint routing rules are not managed. Import by UUID; match the existing type explicitly. Deletion and replacement are blocked: the Iru deletion endpoint unmanages all assigned devices and no atomic empty-Blueprint deletion contract has been verified. Remove Terraform management with a removed block using destroy=false when intentionally retaining the Blueprint.", Attributes: map[string]schema.Attribute{
+	resp.Schema = schema.Schema{MarkdownDescription: "Manages Blueprint container metadata and manual enrollment settings. New resources default to Assignment Map type; classic creation is refused because Iru retired Classic Blueprints. Omitting type on an existing resource preserves its observed type. Legacy reads/import/metadata updates remain available, without a promise of current tenant support. Map nodes, conditions, parameters, Library Item placement, and Blueprint routing rules are not managed. Remote deletion is blocked: the Iru endpoint unmanages all assigned devices and no atomic empty-Blueprint deletion contract has been verified. Observable replacement plans are rejected, but Terraform hides prior state for tainted resources. Use lifecycle prevent_destroy=true to reject those replacements before a new create; otherwise create-before-destroy can create a replacement before DELETE is refused. Remove Terraform management with a removed block using destroy=false when intentionally retaining the Blueprint.", Attributes: map[string]schema.Attribute{
 		"id":                schema.StringAttribute{Computed: true, MarkdownDescription: "Blueprint UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 		"name":              schema.StringAttribute{Required: true, MarkdownDescription: "Unique Blueprint name."},
-		"type":              schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("classic"), MarkdownDescription: "classic or map. Changing type requires replacement.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+		"type":              schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Defaults to map for a new resource. When omitted for an existing resource, retain its observed type. classic is legacy read/import/update only; creation is refused. Changing type requires replacement, which is blocked.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplace()}},
 		"description":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Blueprint description."},
 		"color":             schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Classic Blueprint icon color. When omitted, use the API value. Do not configure for map Blueprints."},
 		"icon":              schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Classic Blueprint icon. When omitted, use the API value. Do not configure for map Blueprints."},
@@ -88,15 +88,24 @@ func (*BlueprintResource) ValidateConfig(ctx context.Context, req resource.Valid
 	if data.Type.ValueString() == "map" && ((!data.Color.IsNull() && !data.Color.IsUnknown()) || (!data.Icon.IsNull() && !data.Icon.IsUnknown())) {
 		resp.Diagnostics.AddError("Unsupported map appearance", "color and icon may only be configured for classic Blueprints.")
 	}
-	if data.Name.IsUnknown() || data.Type.IsUnknown() || data.SourceType.IsUnknown() || data.SourceID.IsUnknown() || data.EnrollmentCode.IsUnknown() {
-		return
+	if !data.Name.IsNull() && !data.Name.IsUnknown() && strings.TrimSpace(data.Name.ValueString()) == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Invalid Blueprint name", "name must not be blank.")
 	}
-	input := data.input()
-	if data.Type.IsNull() {
-		input.Type = "classic"
+	if !data.Type.IsNull() && !data.Type.IsUnknown() && !client.ValidBlueprintType(data.Type.ValueString()) {
+		resp.Diagnostics.AddAttributeError(path.Root("type"), "Invalid Blueprint type", "Blueprint type must be classic or map.")
 	}
-	if err := input.Validate(); err != nil {
-		resp.Diagnostics.AddError("Invalid Blueprint configuration", err.Error())
+	if !data.SourceType.IsUnknown() && !data.SourceID.IsUnknown() {
+		if err := client.ValidateBlueprintSource(data.SourceType.ValueString(), data.SourceID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Invalid Blueprint clone source", err.Error())
+		}
+	} else if !data.SourceType.IsUnknown() && !data.SourceType.IsNull() && data.SourceType.ValueString() != "" && data.SourceType.ValueString() != "blueprint" && data.SourceType.ValueString() != "template" {
+		resp.Diagnostics.AddAttributeError(path.Root("source_type"), "Invalid clone source type", "Use blueprint or template.")
+	}
+	if !data.EnrollmentCode.IsNull() && !data.EnrollmentCode.IsUnknown() {
+		code := data.EnrollmentCode.ValueString()
+		if err := client.ValidateBlueprintEnrollmentCode(&code); err != nil {
+			resp.Diagnostics.AddAttributeError(path.Root("enrollment_code"), "Invalid enrollment code", err.Error())
+		}
 	}
 }
 func blueprintState(value client.ManagedBlueprint, prior blueprintModel) blueprintModel {
@@ -151,6 +160,12 @@ func (r *BlueprintResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 	value, err := r.client.GetManagedBlueprint(ctx, data.ID.ValueString())
 	if client.IsNotFound(err) {
+		if resp.Private != nil {
+			resp.Diagnostics.Append(resp.Private.SetKey(ctx, retainedExistingPlanKey, nil)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+		}
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -184,22 +199,47 @@ func (r *BlueprintResource) Update(ctx context.Context, req resource.UpdateReque
 // saved plans created by an older provider; a preflight count would have a race
 // with a new device assignment before DELETE and is not an atomic safeguard.
 func (*BlueprintResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-	if req.State.Raw.IsNull() {
-		return
-	}
 	if req.Plan.Raw.IsNull() {
-		resp.Diagnostics.AddError("Blueprint deletion blocked", blueprintDeletionBlocked)
+		if !req.State.Raw.IsNull() {
+			resp.Diagnostics.AddError("Blueprint deletion blocked", blueprintDeletionBlocked)
+		}
 		return
 	}
-	var before, after blueprintModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &before)...)
+	if blockRetainedReplacement(ctx, req, resp, "Blueprint", blueprintDeletionBlocked) {
+		return
+	}
+	var before, after, config blueprintModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &after)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if (!after.Type.IsUnknown() && !before.Type.Equal(after.Type)) ||
-		(!after.SourceType.IsUnknown() && !before.SourceType.Equal(after.SourceType)) ||
-		(!after.SourceID.IsUnknown() && !before.SourceID.Equal(after.SourceID)) {
+	if req.State.Raw.IsNull() {
+		// A creation-only default avoids changing imported or existing state
+		// merely because the current platform's default differs from a legacy one.
+		if config.Type.IsNull() && (after.Type.IsUnknown() || after.Type.IsNull()) {
+			after.Type = types.StringValue("map")
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("type"), after.Type)...)
+		}
+		if after.Type.ValueString() == "classic" {
+			resp.Diagnostics.AddAttributeError(path.Root("type"), "Classic Blueprint creation unsupported", client.ClassicBlueprintCreationUnsupported)
+		}
+	}
+	if after.Type.ValueString() == "map" && ((!config.Color.IsNull() && !config.Color.IsUnknown()) || (!config.Icon.IsNull() && !config.Icon.IsUnknown())) {
+		resp.Diagnostics.AddError("Unsupported map appearance", "color and icon may only be configured for legacy classic Blueprints; map API appearance writes are not verified.")
+	}
+	if req.State.Raw.IsNull() || resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(req.State.Get(ctx, &before)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if after.Type.IsUnknown() || after.SourceType.IsUnknown() || after.SourceID.IsUnknown() {
+		resp.Diagnostics.AddError("Blueprint replacement blocked", blueprintDeletionBlocked+" Resolve type, source_type and source_id before planning changes to an existing Blueprint; unknown immutable inputs may require replacement.")
+		return
+	}
+	if !before.Type.Equal(after.Type) || !before.SourceType.Equal(after.SourceType) || !before.SourceID.Equal(after.SourceID) {
 		resp.Diagnostics.AddError("Blueprint replacement blocked", blueprintDeletionBlocked+" Keep type and clone-source inputs unchanged. Imported Blueprints cannot recover clone provenance; omit source_type and source_id after import.")
 	}
 }
@@ -207,7 +247,7 @@ func (*BlueprintResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 const blueprintDeletionBlocked = "Iru Blueprint deletion unmanages all assigned devices. The provider cannot verify an atomic empty-Blueprint deletion, so it refuses DELETE and retains Terraform state. Move or reconcile dependencies and review deletion outside Terraform. To retain the remote Blueprint and stop managing it, use a removed block with lifecycle { destroy = false }."
 
 func (*BlueprintResource) Delete(_ context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
-	resp.Diagnostics.AddError("Blueprint deletion blocked", blueprintDeletionBlocked)
+	resp.Diagnostics.AddError("Blueprint deletion blocked", blueprintDeletionBlocked+" "+retainedReplacementFailureDetail)
 }
 func (*BlueprintResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	if !client.ValidID(req.ID) {

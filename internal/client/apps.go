@@ -44,15 +44,30 @@ type App struct {
 	FileSize *int64  `json:"file_size,omitempty"`
 }
 
+func ValidInstallerKey(value string) bool {
+	return strings.TrimSpace(value) != "" && strings.IndexFunc(value, unicode.IsControl) < 0
+}
+
+func ValidAppInstallType(value string) bool {
+	return value == "package" || value == "zip" || value == "image"
+}
+
+func ValidAppEnforcement(value string) bool {
+	return value == "install_once" || value == "continuously_enforce" || value == "no_enforcement"
+}
+
 func (input AppInput) Validate() error {
-	if strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.FileKey) == "" || strings.IndexFunc(input.FileKey, unicode.IsControl) >= 0 {
+	if strings.TrimSpace(input.Name) == "" || !ValidInstallerKey(input.FileKey) {
 		return errors.New("name and an existing uploaded file_key are required; file_key must contain no control characters")
 	}
-	if input.InstallType != "package" && input.InstallType != "zip" && input.InstallType != "image" {
+	if !ValidAppInstallType(input.InstallType) {
 		return errors.New("install_type must be package, zip, or image")
 	}
 	if input.InstallType == "zip" && strings.TrimSpace(input.UnzipLocation) == "" {
 		return errors.New("zip installation requires unzip_location")
+	}
+	if !ValidAppEnforcement(input.InstallEnforcement) {
+		return errors.New("install_enforcement must be install_once, continuously_enforce, or no_enforcement")
 	}
 	switch input.InstallEnforcement {
 	case "install_once":
@@ -64,8 +79,6 @@ func (input AppInput) Validate() error {
 		if !input.ShowInSelfService {
 			return errors.New("no_enforcement requires Self Service and a category")
 		}
-	default:
-		return errors.New("install_enforcement must be install_once, continuously_enforce, or no_enforcement")
 	}
 	if input.AuditScript != "" && input.InstallEnforcement != "continuously_enforce" {
 		return errors.New("audit_script is supported only with continuously_enforce")

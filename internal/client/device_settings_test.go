@@ -100,7 +100,7 @@ func TestDeviceSettingsRejectsUndocumentedWritesBeforeTransport(t *testing.T) {
 			t.Fatal("invalid enrolled-device patch accepted")
 		}
 	}
-	for _, fields := range []map[string]any{{"tags": []string{}}, {"user_id": nil}, {"asset_tag": nil}, {"use_blueprint_routing": true}, {"blueprint_id": nil, "use_blueprint_routing": false}, {"override_dep_profile_id": "not-a-uuid"}} {
+	for _, fields := range []map[string]any{{"tags": nil}, {"user_id": nil}, {"asset_tag": nil}, {"use_blueprint_routing": true}, {"blueprint_id": nil, "use_blueprint_routing": false}, {"override_dep_profile_id": "not-a-uuid"}} {
 		if _, err := c.UpdateDeviceSettings(context.Background(), testID, true, fields); err == nil {
 			t.Fatal("unsupported ADE patch accepted")
 		}
@@ -125,8 +125,9 @@ func TestADEMetadataPreservesLegacyNumericUserWithoutEnablingWrites(t *testing.T
 		if err != nil || v.UserID == nil || *v.UserID != legacy || calls != 1 {
 			t.Fatalf("legacy metadata identity was lost: %v", err)
 		}
-		if _, err := c.GetDeviceSettings(context.Background(), testID, true); err == nil {
-			t.Fatal("legacy identity silently enabled settings management")
+		observed, err := c.GetDeviceSettings(context.Background(), testID, true)
+		if err != nil || observed.UserID == nil || *observed.UserID != legacy {
+			t.Fatal("settings read lost an exact legacy user observation")
 		}
 		if _, err := c.UpdateDeviceSettings(context.Background(), testID, true, map[string]any{"user_id": legacy}); err == nil || calls != 2 {
 			t.Fatal("legacy user identity reached PATCH")
@@ -134,7 +135,7 @@ func TestADEMetadataPreservesLegacyNumericUserWithoutEnablingWrites(t *testing.T
 	}
 	for _, invalid := range []string{`0`, `-1`, `1.5`, `1e2`, `18446744073709551616`, `"42"`, `true`, `{}`} {
 		body := strings.Replace(adeDeviceFixture, `"user_id":null`, `"user_id":`+invalid, 1)
-		if _, err := decodeDeviceRecord([]byte(body), testID, true, true); err == nil {
+		if _, err := decodeDeviceRecord([]byte(body), testID, true); err == nil {
 			t.Fatal("invalid or unverified ADE identity form accepted")
 		}
 	}

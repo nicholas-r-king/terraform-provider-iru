@@ -82,11 +82,28 @@ func (data profileModel) unknownInput() bool {
 func (*CustomProfileResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var data profileModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() || data.unknownInput() {
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := data.input().Validate(); err != nil {
-		resp.Diagnostics.AddError("Invalid Custom Profile configuration", err.Error())
+	// Validate known independent fields even when another expression is unknown.
+	// Do not turn an unresolved platform into false: only reject an empty target
+	// selection once all platform choices are known. Apply still validates the
+	// complete resolved input immediately before a write.
+	if !data.Name.IsNull() && !data.Name.IsUnknown() && strings.TrimSpace(data.Name.ValueString()) == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Invalid profile name", "name must not be empty or whitespace.")
+	}
+	if !data.Profile.IsNull() && !data.Profile.IsUnknown() {
+		if err := client.ValidateProfileXML(data.Profile.ValueString()); err != nil {
+			resp.Diagnostics.AddAttributeError(path.Root("profile"), "Invalid profile XML", err.Error())
+		}
+	}
+	unknownPlatform, selected := false, false
+	for _, value := range []types.Bool{data.RunsOnMac, data.RunsOnIphone, data.RunsOnIpad, data.RunsOnTV, data.RunsOnVision} {
+		unknownPlatform = unknownPlatform || value.IsUnknown()
+		selected = selected || value.ValueBool()
+	}
+	if !unknownPlatform && !selected {
+		resp.Diagnostics.AddError("Profile platform required", "Choose at least one supported runs_on_* platform.")
 	}
 }
 

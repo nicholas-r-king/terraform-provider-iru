@@ -8,10 +8,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Iru can strip outer script whitespace. Preserve a known configured spelling
-// when only that normalization differs; keep substantive remote changes as drift.
+// Preserve only the observed removal of final line endings, in one direction.
+// Spaces, tabs and leading whitespace can change executable semantics and must
+// remain visible as drift. Never rewrite the configured source bytes.
 func scriptValue(remote string, prior types.String) types.String {
-	if !prior.IsNull() && !prior.IsUnknown() && strings.TrimSpace(remote) == strings.TrimSpace(prior.ValueString()) {
+	if !prior.IsNull() && !prior.IsUnknown() && (remote == prior.ValueString() || remote == strings.TrimRight(prior.ValueString(), "\r\n")) {
 		return prior
 	}
 	return types.StringValue(remote)

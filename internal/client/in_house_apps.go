@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"unicode"
 )
 
 const inHouseAppsPath = "/api/v1/library/ipa-apps"
@@ -29,7 +28,7 @@ type InHouseApp struct {
 }
 
 func (input InHouseAppInput) Validate() error {
-	if strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.FileKey) == "" || strings.IndexFunc(input.FileKey, unicode.IsControl) >= 0 {
+	if strings.TrimSpace(input.Name) == "" || !ValidInstallerKey(input.FileKey) {
 		return errors.New("In-House App requires a nonblank name and existing uploaded file_key without control characters")
 	}
 	if !input.RunsOnIphone && !input.RunsOnIpad && !input.RunsOnTV {
@@ -38,6 +37,24 @@ func (input InHouseAppInput) Validate() error {
 	return nil
 }
 func decodeInHouseApp(data []byte, expected string) (InHouseApp, error) {
+	value, err := decodeInHouseAppConfiguration(data, expected)
+	if err != nil {
+		return value, err
+	}
+	if value.InHouseAppInput.Validate() != nil {
+		return value, errors.New("Iru returned invalid In-House App managed fields (content withheld)")
+	}
+	if value.SHA256 != nil {
+		lower := strings.ToLower(*value.SHA256)
+		value.SHA256 = &lower
+	}
+	return value, nil
+}
+
+// Configuration reads observe platform flags without imposing write-side
+// platform selection rules. Optional metadata stays null and digest case stays
+// exactly as reported; a lookup does not prove installer availability/integrity.
+func decodeInHouseAppConfiguration(data []byte, expected string) (InHouseApp, error) {
 	var value InHouseApp
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(data, &fields) != nil || json.Unmarshal(data, &value) != nil {
@@ -48,7 +65,7 @@ func decodeInHouseApp(data []byte, expected string) (InHouseApp, error) {
 			return value, errors.New("Iru In-House App response is missing managed fields (content withheld)")
 		}
 	}
-	if !ValidID(value.ID) || (expected != "" && !strings.EqualFold(value.ID, expected)) || value.InHouseAppInput.Validate() != nil {
+	if !ValidID(value.ID) || (expected != "" && !strings.EqualFold(value.ID, expected)) || strings.TrimSpace(value.Name) == "" || !ValidInstallerKey(value.FileKey) {
 		return value, errors.New("Iru returned invalid In-House App managed fields (content withheld)")
 	}
 	value.ID = strings.ToLower(value.ID)
@@ -56,8 +73,6 @@ func decodeInHouseApp(data []byte, expected string) (InHouseApp, error) {
 		if !ValidInstallerSHA256(*value.SHA256) {
 			return value, errors.New("Iru returned an invalid IPA checksum (content withheld)")
 		}
-		lower := strings.ToLower(*value.SHA256)
-		value.SHA256 = &lower
 	}
 	if value.FileSize != nil && *value.FileSize < 0 {
 		return value, errors.New("Iru returned an invalid IPA file size")
@@ -84,6 +99,20 @@ func (c *Client) GetInHouseApp(ctx context.Context, id string) (InHouseApp, erro
 	}
 	return decodeInHouseApp(data, id)
 }
+
+// GetInHouseAppConfiguration performs an exact GET with the observation-only
+// decoder, never a write, collection traversal or installer URL download.
+func (c *Client) GetInHouseAppConfiguration(ctx context.Context, id string) (InHouseApp, error) {
+	if !ValidID(id) {
+		return InHouseApp{}, errors.New("In-House App ID must be a UUID")
+	}
+	data, err := c.request(ctx, http.MethodGet, inHouseAppsPath+"/"+strings.ToLower(id), nil, http.StatusOK)
+	if err != nil {
+		return InHouseApp{}, err
+	}
+	return decodeInHouseAppConfiguration(data, id)
+}
+
 func (c *Client) UpdateInHouseApp(ctx context.Context, id string, input InHouseAppInput, replaceInstaller bool) (InHouseApp, error) {
 	if !ValidID(id) {
 		return InHouseApp{}, errors.New("In-House App ID must be a UUID")

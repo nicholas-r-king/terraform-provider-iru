@@ -252,6 +252,33 @@ func TestTerraformCLIInstallerUploads(t *testing.T) {
 				}
 				mu.Unlock()
 			}
+			// Moving identical bytes is a local source-path transition, not an
+			// installer replacement. Still exercise Update through Terraform.
+			copyName := filepath.Join(t.TempDir(), "same-bytes-copy"+extension)
+			originalBytes, err := os.ReadFile(filename)
+			if err != nil || os.WriteFile(copyName, originalBytes, 0600) != nil {
+				t.Fatal("same-content source fixture copy failed")
+			}
+			filename = copyName
+			config(true)
+			run(2, "plan", "-no-color", "-detailed-exitcode")
+			run(0, "apply", "-auto-approve", "-no-color")
+			run(0, "plan", "-no-color", "-detailed-exitcode")
+			var copied struct {
+				Values struct {
+					RootModule struct {
+						Resources []struct{ Values map[string]any } `json:"resources"`
+					} `json:"root_module"`
+				} `json:"values"`
+			}
+			if json.Unmarshal([]byte(run(0, "show", "-json")), &copied) != nil || len(copied.Values.RootModule.Resources) != 1 || copied.Values.RootModule.Resources[0].Values["source_file"] != filepath.ToSlash(copyName) {
+				t.Fatal("path-only update did not preserve the new local source path")
+			}
+			mu.Lock()
+			if uploads != 1 || presigns != 1 || replacements != 0 {
+				t.Error("identical bytes at a new source path requested or replaced an installer")
+			}
+			mu.Unlock()
 			if os.WriteFile(filename, []byte("synthetic installer B"), 0600) != nil {
 				t.Fatal("fixture write failed")
 			}

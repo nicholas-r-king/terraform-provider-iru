@@ -46,6 +46,7 @@ func TestTerraformCLIRefreshFailuresPreserveImportedState(t *testing.T) {
 				}
 				w.Header().Set("Content-Type", "application/json")
 				if status != 200 {
+					w.Header().Set("Retry-After", "0")
 					w.WriteHeader(status)
 					return
 				}
@@ -63,7 +64,7 @@ func TestTerraformCLIRefreshFailuresPreserveImportedState(t *testing.T) {
 			write(fmt.Sprintf("resource %q \"example\" {\n%s\n}\n", "iru_"+c.kind, c.config))
 			run(0, "import", "-no-color", address, c.importID)
 			before := run(0, "state", "pull")
-			for _, code := range []int{401, 403, 200} {
+			for _, code := range []int{401, 403, 429, 503, 200} {
 				mu.Lock()
 				status, malformed = code, code == 200
 				mu.Unlock()

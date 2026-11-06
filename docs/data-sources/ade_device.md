@@ -12,6 +12,11 @@ Reads only assignment metadata for one exact device UUID. It omits names, serial
 
 Only the documented exact-UUID GET is used. A missing object reports an error; the lookup does not create a replacement or modify assignments. Omitted API status fields remain null rather than becoming invented defaults.
 
+`tags` is the observed set of tag names. A missing field is returned as null;
+an explicit empty list is an empty set. Malformed/null lists fail instead of
+inventing emptiness. This lookup never assigns or clears tags. A legacy numeric
+`user_id` is an exact decimal observation, not a directory UUID to configure.
+
 ## Example Usage
 
 
@@ -35,5 +40,6 @@ data "iru_ade_device" "example" {
 - `blueprint_id` (String) Assigned Blueprint UUID. ADE routing is represented by an empty string.
 - `id` (String) Canonical device UUID.
 - `override_dep_profile_id` (String) ADE Library Item override UUID, or null when cleared or not reported by the API. Management requires the API to report this property.
+- `tags` (Set of String) Observed assigned tag names. ADE returns null when the field is unreported; an empty set is an observed empty list. This lookup never assigns or clears tags.
 - `use_blueprint_routing` (Boolean) Whether the ADE record uses Blueprint routing.
 - `user_id` (String) Assigned directory-user UUID, legacy ADE numeric user ID represented as a decimal string, or null when unassigned. A numeric ID is not a directory UUID and must not be substituted into user lookups or settings writes.

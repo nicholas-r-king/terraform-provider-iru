@@ -14,6 +14,12 @@ This resource adopts an already enrolled device. Omitted fields are observed but
 
 A successful PATCH is followed by GET and configured-value verification. Permission/read errors retain prior state, and ambiguous writes are not replayed. A verified 404 removes the settings mapping from state but cannot re-enroll or recreate a missing device.
 
+A different `device_id` UUID replaces only the settings projection. UUID casing
+alone is an in-place spelling update with no API write. On a real selector change,
+omitted settings are observed from the new record; the prior record's observed
+values are not copied to it. Both Terraform replacement orders retain the old
+and new remote records.
+
 ## Example Usage
 
 
@@ -30,14 +36,14 @@ resource "iru_device_settings" "example" {
 
 ### Required
 
-- `device_id` (String) Existing enrolled or ADE-device record UUID, according to resource type. Changing it releases the old settings and adopts the new record.
+- `device_id` (String) Existing enrolled or ADE-device record UUID, according to resource type. A different UUID releases the old settings and adopts the new record; casing alone does not replace it.
 
 ### Optional
 
 - `asset_tag` (String) Asset tag. Omit to leave unmanaged. For enrolled devices only, an empty string explicitly clears it.
 - `blueprint_id` (String) Assigned Blueprint UUID. Omit to observe without managing it.
-- `tags` (Set of String) Assigned tag names. Omit to leave unmanaged; an explicit empty set clears all tags.
-- `user_id` (String) Assigned directory-user UUID. Omit to leave unmanaged. For enrolled devices only, an empty string explicitly clears assignment.
+- `tags` (Set of String) Full set of assigned tag names. Omit to observe without writing; an explicit empty set clears all tags. ADE management requires the GET response to report tags; an omitted list is unknown, never assumed empty. Tag definitions are separate from this setting.
+- `user_id` (String) Assigned directory-user UUID. Omit to leave unmanaged. ADE may report a legacy decimal user identifier when omitted; it is read-only and cannot be configured or sent back as a UUID. For enrolled devices only, an empty string explicitly clears assignment.
 
 ### Read-Only
 
@@ -51,4 +57,4 @@ terraform import iru_device_settings.example 11111111-2222-4333-8444-55555555555
 ```
 
 
-Contract: [official Iru API](https://api-docs.iru.com/). Mock tests are not live tenant acceptance.
+Contract: [official Iru API](https://api-docs.iru.com/).

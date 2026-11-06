@@ -12,6 +12,12 @@ Manages a Note on an existing enrolled device. This resource never enrolls, dele
 
 Import requires both the device UUID and Note UUID. Note content can contain HTML; match the exact returned content. Content remains in state even though displays redact it. Destroy deletes only the Note, never the device.
 
+Changing only UUID casing updates the stored spelling without replacing or
+PATCHing the Note. Changing its content still updates the same Note. A genuinely
+different device UUID requires Note replacement and deletes the old Note as part
+of that replacement; inspect that plan before applying. Both replacement orders
+are covered locally. No real device move is implied by synthetic coverage.
+
 ## Example Usage
 
 
@@ -29,7 +35,7 @@ resource "iru_device_note" "example" {
 ### Required
 
 - `content` (String, Sensitive) Note content as returned by Iru, including HTML when present. Stored in Terraform state; avoid embedding credentials.
-- `device_id` (String) Existing device UUID. Moving the Note to a different device requires replacement.
+- `device_id` (String) Existing device UUID. Moving the Note to a different UUID requires replacement; casing alone does not move or replace the Note.
 
 ### Read-Only
 
@@ -44,4 +50,3 @@ terraform import iru_device_note.example aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/11
 
 
 The implementation follows the [official Iru API](https://api-docs.iru.com/).
-Synthetic lifecycle checks do not establish live API compatibility.

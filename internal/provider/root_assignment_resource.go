@@ -33,16 +33,11 @@ func NewRootAssignmentResource() resource.Resource { return &RootAssignmentResou
 func (*RootAssignmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_blueprint_library_item_assignment"
 }
-func assignmentReplaceModifier() planmodifier.String {
-	return stringplanmodifier.RequiresReplaceIf(func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-		resp.RequiresReplace = req.PlanValue.IsUnknown() || req.StateValue.IsUnknown() || !strings.EqualFold(req.PlanValue.ValueString(), req.StateValue.ValueString())
-	}, "Changing the UUID replaces only this membership; UUID casing alone does not mutate Iru.", "Changing the UUID replaces only this membership; UUID casing alone does not mutate Iru.")
-}
 func (*RootAssignmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schema.Schema{MarkdownDescription: "Manages one Library Item membership in a classic Blueprint root. Does not create/delete the Blueprint or Library Item. Assignment can apply policies to that Blueprint's devices; detaching can remove policy. Assignment Maps and conditional node placement are not supported because aggregate membership does not prove node placement. Import by blueprint_uuid/library_item_uuid.", Attributes: map[string]schema.Attribute{
+	resp.Schema = schema.Schema{DeprecationMessage: "Legacy classic-only resource. Iru documents conversion of Classic Blueprints to Assignment Maps on April 1, 2026. This resource cannot manage current Assignment Maps; aggregate membership cannot establish node placement.", MarkdownDescription: "Legacy-only resource for one Library Item membership in a verified existing classic Blueprint root. It does not cover current Iru Assignment Maps, including simple views, and must not be used as a general assignment primitive. Does not create/delete the Blueprint or Library Item. Assignment can apply policies to that Blueprint's devices; detaching can remove policy. Node-aware read/import/drift support is required before map placement can be managed. Import by blueprint_uuid/library_item_uuid.", Attributes: map[string]schema.Attribute{
 		"id":              schema.StringAttribute{Computed: true, MarkdownDescription: "Canonical blueprint_uuid/library_item_uuid composite identity.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-		"blueprint_id":    schema.StringAttribute{Required: true, MarkdownDescription: "Exact existing classic Blueprint UUID. Changing it replaces this membership.", PlanModifiers: []planmodifier.String{assignmentReplaceModifier()}},
-		"library_item_id": schema.StringAttribute{Required: true, MarkdownDescription: "Exact existing Library Item UUID. Changing it detaches the old pair and assigns the new pair.", PlanModifiers: []planmodifier.String{assignmentReplaceModifier()}},
+		"blueprint_id":    schema.StringAttribute{Required: true, MarkdownDescription: "Exact existing classic Blueprint UUID. Changing it replaces this membership.", PlanModifiers: []planmodifier.String{uuidReplacementModifier()}},
+		"library_item_id": schema.StringAttribute{Required: true, MarkdownDescription: "Exact existing Library Item UUID. Changing it detaches the old pair and assigns the new pair.", PlanModifiers: []planmodifier.String{uuidReplacementModifier()}},
 	}}
 }
 func (r *RootAssignmentResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

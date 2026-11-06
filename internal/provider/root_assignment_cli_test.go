@@ -291,3 +291,80 @@ func TestTerraformCLIRootAssignmentMalformedReadsRetainState(t *testing.T) {
 		t.Fatalf("import/refresh sent %d mutations", writes)
 	}
 }
+
+func TestTerraformCLIRootAssignmentBlueprintReplacement(t *testing.T) {
+	const otherBlueprint = "aaaaaaaa-bbbb-4ccc-8ddd-000000000002"
+	var mu sync.Mutex
+	members := map[string]map[string]bool{syntheticCategory: {assignmentUnrelated: true}, otherBlueprint: {assignmentUnrelated: true}}
+	posts := []string{}
+	run, write := mockTerraform(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		pieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(pieces) < 4 || pieces[0] != "api" || pieces[1] != "v1" || pieces[2] != "blueprints" {
+			t.Error("unexpected assignment route")
+			w.WriteHeader(400)
+			return
+		}
+		bp := pieces[3]
+		bank, ok := members[bp]
+		if !ok {
+			t.Error("unexpected Blueprint identity")
+			w.WriteHeader(400)
+			return
+		}
+		if r.Method == "GET" && len(pieces) == 4 {
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": bp, "name": "Synthetic", "type": "classic"})
+			return
+		}
+		if r.Method == "GET" && len(pieces) == 5 && pieces[4] == "list-library-items" {
+			items := []map[string]string{}
+			for id, present := range bank {
+				if present {
+					items = append(items, map[string]string{"id": id, "name": "Synthetic"})
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"results": items, "next": nil})
+			return
+		}
+		var input map[string]string
+		if r.Method != "POST" || len(pieces) != 5 || json.NewDecoder(r.Body).Decode(&input) != nil || len(input) != 1 || input["library_item_id"] != assignmentItemA {
+			t.Error("replacement touched parent or foreign item")
+			w.WriteHeader(405)
+			return
+		}
+		switch pieces[4] {
+		case "assign-library-item":
+			bank[assignmentItemA] = true
+		case "remove-library-item":
+			bank[assignmentItemA] = false
+		default:
+			t.Error("unknown membership operation")
+			w.WriteHeader(400)
+			return
+		}
+		posts = append(posts, pieces[4]+":"+bp)
+		_ = json.NewEncoder(w).Encode([]string{assignmentItemA})
+	}))
+	config := func(bp string) {
+		write(fmt.Sprintf("resource \"iru_blueprint_library_item_assignment\" \"example\" {\n blueprint_id=%q\n library_item_id=%q\n}\n", bp, assignmentItemA))
+	}
+	config(syntheticCategory)
+	run(0, "apply", "-auto-approve", "-no-color")
+	run(0, "plan", "-detailed-exitcode", "-no-color")
+	config(otherBlueprint)
+	run(2, "plan", "-detailed-exitcode", "-no-color", "-out=move.plan")
+	run(0, "apply", "-auto-approve", "-no-color", "move.plan")
+	run(0, "plan", "-detailed-exitcode", "-no-color")
+	if !strings.Contains(run(0, "state", "pull"), otherBlueprint+"/"+assignmentItemA) {
+		t.Fatal("replacement lost destination composite identity")
+	}
+	run(0, "destroy", "-auto-approve", "-no-color")
+	mu.Lock()
+	defer mu.Unlock()
+	expected := []string{"assign-library-item:" + syntheticCategory, "remove-library-item:" + syntheticCategory, "assign-library-item:" + otherBlueprint, "remove-library-item:" + otherBlueprint}
+	if strings.Join(posts, ",") != strings.Join(expected, ",") || members[syntheticCategory][assignmentItemA] || members[otherBlueprint][assignmentItemA] || !members[syntheticCategory][assignmentUnrelated] || !members[otherBlueprint][assignmentUnrelated] {
+		t.Fatal("Blueprint replacement did not isolate the exact old/new pairs")
+	}
+}

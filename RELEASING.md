@@ -1,189 +1,88 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 
-# Preparing an experimental Registry release
+# Releasing
 
-The intended distribution is the public Terraform Registry at
-`nicholas-r-king/iru`, backed by the public GitHub repository
-`nicholas-r-king/terraform-provider-iru`. The repository is currently private;
-preparing these files does not authorize exposing its contents or history.
-No version has been published. Real Iru tenant compatibility has not been
-acceptance-tested. A public development release must retain that qualification.
+The public provider is `nicholas-r-king/iru`; preview `0.1.0-alpha.1` is already
+published. Development changes require a new version and separate release
+approval. Never move a released tag or replace its assets.
 
-The manual **Prepare experimental release draft** workflow creates a signed,
-experimental **draft** GitHub release only. It never changes repository visibility,
-creates a tag, finalizes a release, or registers a provider. Stable tags are
-rejected while real tenant validation is incomplete. A draft is not discoverable
-by the Registry and cannot be installed from it.
+## Prepare and verify
 
-## Owner prerequisites
+1. Review the exact source commit, changelog and compatibility statement. Require
+   its native test, release-configuration and package-rehearsal checks to pass.
+   Record separately approved live validation and disclose remaining limits from
+   [validation status](VALIDATION_STATUS.md).
+2. Select a SemVer version and create its `v`-prefixed tag through the owner's
+   release process. The tag must identify the reviewed commit; a branch must not
+   share its name. Stable releases remain inappropriate while required acceptance
+   is incomplete.
+3. Build Darwin/Linux amd64/arm64 packages from a clean tagged checkout with the
+   pinned toolchain and GoReleaser configuration. The repository's release tools
+   verify identity, package contents, manifest, architecture and legal material.
+4. Review dependency licenses/notices and source availability. Each ZIP includes
+   `LICENSE` and `release-legal/`; automatic filename collection does not settle
+   every dependency's obligations. Compare repeated builds, then run each package
+   natively through offline mirror installation and schema export.
 
-1. Review and merge the intended provider changes and release preparation through
-   the normal protected PR process. Choose the exact source commit; earlier CI
-   results do not qualify a different commit. Ensure the workflow and that commit
-   contain the same reviewed release configuration/tooling.
-   Require the normal **Release configuration** CI job to pass on that source:
-   it runs GoReleaser v2.19.0 `check` on the exact tested SHA with read-only
-   permissions and no signing secrets. It does not build or publish a release.
-   Also require **Unsigned package rehearsal** and all four **Native rehearsal
-   package** jobs to pass on that same source before considering release approval.
-2. Complete separately authorized isolated real-Iru validation before publication,
-   covering the documented resource lifecycles, imports, no-op plans, refresh,
-   permissions and safe cleanup. Record results without tenant data or credentials.
-   Synthetic tests cannot establish live compatibility. If the owner deliberately
-   distributes an unvalidated experimental preview, that requires a separate
-   explicit decision and clear release/documentation disclosure; this preparation
-   does not make that decision.
-3. Choose an experimental SemVer version, such as `0.1.0-alpha.1`, and add a
-   `## 0.1.0-alpha.1` section to `CHANGELOG.md`. Keep the compatibility qualification
-   and supported Terraform version explicit. Create its `v`-prefixed tag on the
-   reviewed commit through the owner's trusted process. No branch may share its
-   name. Do not move a released tag or replace existing release assets.
-4. Configure the `registry-release` GitHub environment with required reviewers,
-   prevent self-review, and restrict deployment to the trusted `main` workflow.
-   Store `GPG_PRIVATE_KEY` and a nonempty `PASSPHRASE` as **environment secrets**,
-   and the complete primary signing-key fingerprint as environment variable
-   `GPG_FINGERPRINT`. Set environment variable `IRU_RELEASE_SETUP` to
-   `reviewers-and-signing-configured` only after reviewing these protections.
-   Keep tenant credentials out of this environment. Provision/export a signing
-   key through an approved owner process; no key is supplied/generated here.
-   The Registry accepts RSA/DSA keys, not ECC. Use a dedicated RSA signing key
-   (for example RSA 4096) with signing capability on the primary key. The workflow
-   checks the primary key algorithm/capability and forces that exact fingerprint
-   for signing, avoiding automatic selection of an incompatible ECC subkey.
-5. Only after those controls are ready, explicitly enable manual preparation by
-   setting repository variable `IRU_DRAFT_RELEASE_ENABLED` to `true`. Absent that
-   variable the workflow skips all jobs; absent environment setup, fingerprint,
-   key or passphrase the signing job fails before any release API write.
-6. Dispatch the workflow from `main` with the existing tag and its full lowercase
-   40-character commit SHA. Review all native results and generated legal/source
-   material before approving the signing environment. Approval authorizes creation
-   of a draft, not public publication.
-
-## What the workflow checks
-
-Normal PR/main CI first validates the release configuration and the five native
-provider jobs, then rehearses unsigned packaging with the actual GoReleaser
-configuration. Its `v0.0.0-ci.<run-id>.<attempt>` tag is a fixture created only in
-the disposable runner checkout at the exact tested `github.sha`; it is never
-pushed or registered as a release. `GORELEASER_CURRENT_TAG` is fixed to that
-fixture. This path deliberately bypasses the real release identity, merged-main
-and versioned-changelog gates because PR merge commits are valid rehearsal
-sources. Those gates remain mandatory in the separate manual release workflow.
-
-The rehearsal collects source/license material, builds all four platform ZIPs
-with `--skip=sign,publish,announce` and the configured release pipe disabled,
-copies the versioned protocol manifest, and verifies the archives/checksums.
-The unsigned artifact includes `REHEARSAL.txt` identifying its fixture version and
-exact source SHA, is retained for one day, and is consumed only within that
-workflow run. Four native Linux/macOS amd64/arm64 jobs install their respective
-ZIP offline and export its schema using Terraform 1.17.0. These read-only jobs
-have no signing/tenant secrets or publication permissions. Rehearsal success
-does not establish real-Iru compatibility or authorize a public release.
-
-All provider tests run without tenant secrets, on the requested source commit:
-Linux amd64 with Go 1.25.0 and 1.27.3, Linux arm64, macOS amd64, and macOS arm64
-with Go 1.27.3. Terraform 1.17.0 is pinned. Checks include build, module integrity,
-formatting, vet, unit/Framework tests, mock Terraform CLI lifecycles, example
-formatting, and generated documentation. Windows is not a release target.
-
-GoReleaser v2.19.0 is explicitly bound to the requested tag, including when other
-tags point at the same commit. It builds four CGO-disabled binaries with trimmed
-paths, a pinned Go toolchain, no VCS-path stamp, and the release version in
-`main.version`.
-Archive member times/modes are fixed. The workflow builds twice and compares the
-complete checksum lists; failure prevents signing. Its own release publishing pipe
-is disabled; only the gated workflow job can create the GitHub draft. This checks
-reproducibility within that runner/toolchain, not independently reproduced builds.
-
-Each ZIP includes `LICENSE` and a generated `release-legal/` tree containing the
-exact provider source-commit links, dependency module/version source locations,
-and license/copyright/NOTICE/PATENTS/AUTHORS files discovered throughout the
-linked dependency modules and Go runtime source tree. Dependency discovery is
-the union of the four release targets, excludes test/tool-only dependencies,
-and rejects module replacements or missing legal material. Automated filename
-collection is a review aid: review dependency obligations, nested notices and
-source accessibility before distribution. Preserve required additional material
-if any dependency changes. Update the pinned Framework legal-file assertion when
-updating that dependency.
-Source-code extensions such as `.go` are excluded even when their names begin
-with `copyright` or `license`. The generated tree also contains a `go.mod`
-boundary so normal `go test ./...`, `go vet ./...` and package discovery do not
-traverse it if reviewed source material is retained in the future. Git ignore
-rules alone do not provide that Go package boundary.
-That generated `go.mod` is local packaging infrastructure, not a required
-distributable legal notice. The archive configuration includes the root
-`release-legal/SOURCE.txt` explicitly and recursively includes the nested legal
-tree. The pinned glob matcher treats the slash after `**` literally, so a
-recursive pattern alone omits root files. License/source notice requirements
-remain mandatory; package jobs list up to 120 ZIP members before verification
-to make any path mismatch visible in CI.
-
-The release verifier checks all five SHA256 entries, protocol 6.0 manifest,
-safe ZIP paths, required legal/source material, exact source notice, provider
-binary name, embedded version, target architecture and build settings. Each
-target's native runner then installs its ZIP through an offline filesystem mirror
-and exports the provider schema using Terraform. These are package/protocol smoke
-checks with synthetic configuration; they do not contact Iru.
-
-Only the final environment-gated job receives the signing secrets. It imports the
-key into an ephemeral GnuPG home, signs the checked checksum file with a binary
-detached OpenPGP signature, verifies that signature, and creates a new draft
-prerelease. It refuses to replace an existing release. No source checkout or
-provider code runs in the signing job. GnuPG state is removed afterward.
-
-## Artifact contract
-
-For version `0.1.0-alpha.1`, the draft contains:
-
-- Four `terraform-provider-iru_0.1.0-alpha.1_{linux,darwin}_{amd64,arm64}.zip`
-  files, each containing the root binary
-  `terraform-provider-iru_v0.1.0-alpha.1` and legal material.
-- `terraform-provider-iru_0.1.0-alpha.1_manifest.json`, declaring protocol `6.0`.
-- `terraform-provider-iru_0.1.0-alpha.1_SHA256SUMS`, covering all four ZIPs and
-  the manifest.
-- `terraform-provider-iru_0.1.0-alpha.1_SHA256SUMS.sig`, a binary detached GPG
-  signature. An ASCII-armored signature does not satisfy the packaging contract.
-
-Safe local preparation commands, from a clean tagged checkout with the pinned
-Go toolchain and GoReleaser installed, are:
+With `IRU_RELEASE_TAG` and `IRU_RELEASE_COMMIT` already set to the reviewed tag and
+full source SHA, local preparation is:
 
 ```sh
-go run ./tools/release identity -tag v0.1.0-alpha.1 -commit FULL_COMMIT_SHA
-go run ./tools/release materials -tag v0.1.0-alpha.1 -commit FULL_COMMIT_SHA
+go run ./tools/release identity -tag "$IRU_RELEASE_TAG" -commit "$IRU_RELEASE_COMMIT"
+go run ./tools/release materials -tag "$IRU_RELEASE_TAG" -commit "$IRU_RELEASE_COMMIT"
 goreleaser check
 goreleaser release --clean --skip=sign,publish
 ```
 
-For manual verification, copy `terraform-registry-manifest.json` into `dist/`
-using its versioned manifest name, then run `go run ./tools/release verify` with
-the same `-tag` and `-commit`. Native Linux/macOS can also run the `smoke` command
-with those flags and `-terraform /path/to/terraform`. These commands cannot sign
-or publish. `dist/` and `release-legal/` are ignored generated files; start with a
-fresh checkout when rebuilding legal material.
+These commands do not sign or publish. `dist/` and `release-legal/` are ignored
+outputs. See `go run ./tools/release` for `verify`/`smoke` flags; pass the same
+reviewed tag/commit and a verified native Terraform executable.
 
-## Separate public publication decision
+## Artifacts and signing
 
-Before finalizing the first public release, the owner must explicitly approve
-making the GitHub repository and intended source history public after reviewing
-them for secrets, confidential research, licensing and provenance. Preserve the
-exact tagged source and dependency source availability for MPL distribution.
-Review the generated draft assets, changelog, documentation and compatibility
-statement; verify the checksum signature with the public key independently.
+A release contains four `terraform-provider-iru_VERSION_OS_ARCH.zip` packages,
+`terraform-provider-iru_VERSION_manifest.json` declaring protocol `6.0`,
+`terraform-provider-iru_VERSION_SHA256SUMS`, and its binary detached GPG signature
+`terraform-provider-iru_VERSION_SHA256SUMS.sig`. ZIPs contain the versioned provider
+binary and required legal material. Checksums cover the packages and manifest.
 
-Sign in to the Terraform Registry with the authorized GitHub account, ensure the
-namespace/repository access is correct, and add the release signing **public** key
-to the Registry. The private key/passphrase never goes to the Registry. Follow
-the current Registry UI to register the provider and configure its GitHub
-integration. Finalize the reviewed GitHub release only under separate owner
-authorization, confirm Registry ingestion, then verify `terraform init` and schema
-loading from `nicholas-r-king/iru` on the supported platforms. A preview version
-must be selected explicitly. Update the README installation claim only after
-that succeeds. Later changes require a new immutable version.
+Local signing is supported. Use the owner's approved key custody, verify the
+signature independently with its public key, and keep private keys/passphrases
+out of source, logs, command arguments and release assets. No private-key upload,
+key creation or rotation is implied by preparing a release.
 
-Recheck the primary references before enabling publication:
+## Optional GitHub draft workflow
 
-- [HashiCorp provider publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing)
-- [HashiCorp Framework scaffolding release configuration](https://github.com/hashicorp/terraform-provider-scaffolding-framework/blob/main/.goreleaser.yml)
-- [GoReleaser archive configuration](https://goreleaser.com/customization/package/archives/)
-- [GoReleaser checksums](https://goreleaser.com/customization/package/checksum/)
-- [GoReleaser draft releases](https://goreleaser.com/customization/publish/scm/)
+The existing **Prepare experimental release draft** workflow is a separate
+signing path. Its controls are repository policy, not Registry requirements:
+
+- `IRU_DRAFT_RELEASE_ENABLED=true` enables dispatch. Otherwise it stays off.
+- The `registry-release` environment requires reviewers, prevents self-review and
+  restricts deployment to the trusted `main` workflow.
+- That environment supplies `GPG_PRIVATE_KEY`, `PASSPHRASE`, `GPG_FINGERPRINT`, and
+  `IRU_RELEASE_SETUP=reviewers-and-signing-configured`. Provisioning these secrets
+  requires a separately approved owner action; tenant credentials do not belong
+  in the environment. The workflow enforces its supported signing-key algorithm.
+- Dispatch from `main` with the existing tag and full commit SHA. The workflow
+  checks/tests the source, builds twice, compares checksums, verifies legal
+  material and runs four native package smoke jobs before the signing gate.
+- Only the final gated job receives signing secrets. It signs/verifies in an
+  ephemeral GnuPG home and creates a new experimental draft prerelease. It does
+  not create tags, change visibility, finalize releases or publish to the Registry.
+
+Do not weaken these controls to make preparation pass. A draft is not a public
+Registry release, and passing package checks is not live tenant acceptance.
+
+## Publish and verify
+
+Follow [HashiCorp's current publishing instructions](https://developer.hashicorp.com/terraform/registry/providers/publishing).
+An individual GitHub account can publish; an HCP organization is optional
+([account guidance](https://developer.hashicorp.com/terraform/registry#user-account)).
+Verify the existing namespace, repository integration and public signing key
+before registering anything again. Only the public key belongs in the Registry.
+
+After owner approval, finalize the reviewed GitHub release and confirm Registry
+ingestion. In a clean workspace without development overrides, explicitly select
+the preview version, run `terraform init`, check the signing identity and export
+its schema. Record the actual result before changing installation claims. Do not
+reuse an old release's approval for a new version or permission change.

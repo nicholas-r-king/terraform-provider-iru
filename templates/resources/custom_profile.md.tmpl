@@ -36,9 +36,7 @@ deletes the Library Item and can affect assignments managed elsewhere.
 
 Writes are never replayed automatically. A valid returned UUID is retained after
 a malformed create response. Terraform can mark failed creation tainted; verify
-the actual item and configuration before deliberately recovering state. Real
-tenant permissions, XML normalization and platform behavior require live
-acceptance validation.
+the actual item and configuration before deliberately recovering state.
 
 ## Example Usage
 
