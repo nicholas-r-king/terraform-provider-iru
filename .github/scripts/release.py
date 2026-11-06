@@ -68,7 +68,9 @@ def check_tag(tag, commit, api=gh_api):
 
 def validate_policy(environment, policies, tag):
     reviewers = [r for r in environment.get("protection_rules", []) if r.get("type") == "required_reviewers"]
-    require(any(r.get("prevent_self_review") is True and r.get("reviewers") for r in reviewers), "registry-release must have required reviewers and prevent self-review")
+    require(any(any(v.get("type") == "User" and v.get("reviewer", {}).get("login") == "nicholas-r-king"
+                    for v in r.get("reviewers", [])) for r in reviewers),
+            "registry-release must require review by nicholas-r-king")
     policy = environment.get("deployment_branch_policy") or {}
     require(policy.get("custom_branch_policies") is True, "registry-release must restrict selected branches and tags")
     require(any(p.get("type") == "tag" and fnmatch.fnmatchcase(tag, p.get("name", "")) for p in policies.get("branch_policies", [])), "registry-release does not allow this version tag")

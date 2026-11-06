@@ -12,9 +12,10 @@ versions are refused while full acceptance remains incomplete.
 These are repository controls, not Terraform Registry requirements. The workflow
 fails before signing if setup is missing; it does not provision its own access.
 
-- Configure the `registry-release` environment with required reviewers and
-  **Prevent self-review**. Choose a reviewer other than the person triggering the
-  release. Keep existing protection rules intact.
+- Configure the `registry-release` environment with `nicholas-r-king` as a required
+  reviewer. The owner has approved allowing self-review, so the owner may approve
+  a release they triggered. Review is still required; do not bypass the gate.
+  Keep other existing protection rules intact.
 - Select deployment branches/tags and allow the release tag pattern as a **Tag**
   rule, for example `v*`. A `main` branch rule does not authorize version tags.
 - With separate approval for transferring private signing material, store the

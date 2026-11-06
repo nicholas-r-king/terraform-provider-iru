@@ -36,19 +36,25 @@ class ReleasePolicyTests(unittest.TestCase):
                 release.identity(tag, SHA)
 
     def test_environment_must_be_protected_and_allow_the_tag(self):
-        environment = {"protection_rules": [{"type": "required_reviewers", "prevent_self_review": True, "reviewers": [{"type": "User"}]}], "deployment_branch_policy": {"custom_branch_policies": True}}
+        environment = {"protection_rules": [{"type": "required_reviewers", "prevent_self_review": False, "reviewers": [{"type": "User", "reviewer": {"login": "nicholas-r-king"}}]}], "deployment_branch_policy": {"custom_branch_policies": True}}
         policies = {"branch_policies": [{"name": "v*", "type": "tag"}]}
         release.validate_policy(environment, policies, TAG)
-        for change in ("no-rules", "self-review", "no-reviewers", "unrestricted", "branch-only", "wrong-tag"):
+        for change in ("no-rules", "wrong-reviewer", "no-reviewers", "unrestricted", "branch-only", "wrong-tag"):
             env, rules = copy.deepcopy(environment), copy.deepcopy(policies)
             if change == "no-rules": env["protection_rules"] = []
-            if change == "self-review": env["protection_rules"][0]["prevent_self_review"] = False
+            if change == "wrong-reviewer": env["protection_rules"][0]["reviewers"][0]["reviewer"]["login"] = "someone-else"
             if change == "no-reviewers": env["protection_rules"][0]["reviewers"] = []
             if change == "unrestricted": env["deployment_branch_policy"] = None
             if change == "branch-only": rules["branch_policies"][0]["type"] = "branch"
             if change == "wrong-tag": rules["branch_policies"][0]["name"] = "v1.*"
             with self.subTest(change=change), self.assertRaises(release.ReleaseError):
                 release.validate_policy(env, rules, TAG)
+
+    def test_owner_review_also_accepts_stricter_self_review_protection(self):
+        environment = {"protection_rules": [{"type": "required_reviewers", "prevent_self_review": True,
+                       "reviewers": [{"type": "User", "reviewer": {"login": "nicholas-r-king"}}]}],
+                       "deployment_branch_policy": {"custom_branch_policies": True}}
+        release.validate_policy(environment, {"branch_policies": [{"name": "v*", "type": "tag"}]}, TAG)
 
     def test_disabled_release_does_not_access_or_create_an_environment(self):
         with mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": release.REPOSITORY}, clear=True), mock.patch.object(release, "gh_api") as api:
@@ -246,7 +252,7 @@ if name=='gh':
     if '/deployment-branch-policies' in path:
         print(json.dumps(dict(total_count=1,branch_policies=[dict(name='v*',type='tag')]))); sys.exit(0)
     if path.endswith('/environments/registry-release'):
-        rules=[] if mode=='unprotected' else [dict(type='required_reviewers',prevent_self_review=True,reviewers=[dict(type='User')])]
+        rules=[] if mode=='unprotected' else [dict(type='required_reviewers',prevent_self_review=False,reviewers=[dict(type='User',reviewer=dict(login='nicholas-r-king'))])]
         print(json.dumps(dict(protection_rules=rules,deployment_branch_policy=dict(custom_branch_policies=True)))); sys.exit(0)
     if '/git/ref/tags/' in path:
         counter=root/'tag-count'; count=int(counter.read_text())+1 if counter.exists() else 1; counter.write_text(str(count))
