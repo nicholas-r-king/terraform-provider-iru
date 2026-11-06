@@ -100,13 +100,44 @@ func TestDeviceSettingsRejectsUndocumentedWritesBeforeTransport(t *testing.T) {
 			t.Fatal("invalid enrolled-device patch accepted")
 		}
 	}
-	for _, fields := range []map[string]any{{"tags": []string{}}, {"user_id": nil}, {"asset_tag": nil}, {"use_blueprint_routing": true}, {"blueprint_id": nil, "use_blueprint_routing": false}, {"override_dep_profile_id": "not-a-uuid"}} {
+	for _, fields := range []map[string]any{{"tags": nil}, {"user_id": nil}, {"asset_tag": nil}, {"use_blueprint_routing": true}, {"blueprint_id": nil, "use_blueprint_routing": false}, {"override_dep_profile_id": "not-a-uuid"}} {
 		if _, err := c.UpdateDeviceSettings(context.Background(), testID, true, fields); err == nil {
 			t.Fatal("unsupported ADE patch accepted")
 		}
 	}
 	if _, err := c.GetDeviceSettings(context.Background(), "../devices", false); err == nil {
 		t.Fatal("invalid device ID accepted")
+	}
+}
+
+func TestADEMetadataPreservesLegacyNumericUserWithoutEnablingWrites(t *testing.T) {
+	for _, legacy := range []string{"42", "9007199254740993", "18446744073709551615"} {
+		body := strings.Replace(adeDeviceFixture, `"user_id":null`, `"user_id":`+legacy, 1)
+		calls := 0
+		c := testClient(t, func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.Method != http.MethodGet || req.URL.Path != adePath+"/devices/"+testID {
+				t.Fatal("metadata lookup made a write or used the wrong ADE identity")
+			}
+			return response(200, body), nil
+		})
+		v, err := c.GetDeviceMetadata(context.Background(), testID, true)
+		if err != nil || v.UserID == nil || *v.UserID != legacy || calls != 1 {
+			t.Fatalf("legacy metadata identity was lost: %v", err)
+		}
+		observed, err := c.GetDeviceSettings(context.Background(), testID, true)
+		if err != nil || observed.UserID == nil || *observed.UserID != legacy {
+			t.Fatal("settings read lost an exact legacy user observation")
+		}
+		if _, err := c.UpdateDeviceSettings(context.Background(), testID, true, map[string]any{"user_id": legacy}); err == nil || calls != 2 {
+			t.Fatal("legacy user identity reached PATCH")
+		}
+	}
+	for _, invalid := range []string{`0`, `-1`, `1.5`, `1e2`, `18446744073709551616`, `"42"`, `true`, `{}`} {
+		body := strings.Replace(adeDeviceFixture, `"user_id":null`, `"user_id":`+invalid, 1)
+		if _, err := decodeDeviceRecord([]byte(body), testID, true); err == nil {
+			t.Fatal("invalid or unverified ADE identity form accepted")
+		}
 	}
 }
 func TestDeviceSettingsWriteErrorsNeverReplay(t *testing.T) {

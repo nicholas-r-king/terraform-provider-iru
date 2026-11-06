@@ -1,47 +1,50 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 
-# API coverage and migration requirements
+# API coverage
 
-Coverage is based on the [official Iru Endpoint Management API collection](https://api-docs.iru.com/api/collections/15284493/TzCTZkBe?segregateAuth=true&versionTag=latest),
-reviewed 2026-10-29. An API endpoint existing does not establish that it works with
-a particular tenant or token. Synthetic tests and live acceptance are separate.
-Unresolved public contracts and the evidence needed to implement them are listed
-in [API contract gaps](API_CONTRACT_GAPS.md).
+Contracts are based on the [official Iru API reference](https://api-docs.iru.com/).
+The generated reference describes the supported fields. UI features do not imply
+a complete public read/write contract.
 
-| Object | Documented contract | Provider support |
+| Resource | Supported behavior | Important limit |
 | --- | --- | --- |
-| Custom Script | CRUD | Resource; import and drift handling; live lifecycle unverified |
-| Custom Profile | CRUD | Resource; import and drift handling; live lifecycle unverified |
-| Custom App | CRUD, upload | Existing file key or checksum-verified streaming local upload; live lifecycle unverified |
-| Blueprint | CRUD, clone | Metadata/enrollment resource, UUID lookup; nodes/parameters excluded |
-| Blueprint template catalog | Read only; grouped positive integer IDs | Bounded catalog lookup projects IDs/names/categories for source_type=template cloning; parameters are not made writable |
-| Tag | CRUD; read via paginated list | Resource; import, drift and disappearance handling |
-| In-House App | CRUD, upload and upload status | Existing key or local streaming upload with bounded IPA validation; live lifecycle unverified |
-| ADE integration | CRUD, token renewal, Blueprint/routing assignment | Resource with write-only token input and local renewal version; documented routing/Blueprint choices supported; multipart/response routing details remain live-unverified |
-| ADE public key | Read-only ABM bootstrap PEM | Public-only certificate/key lookup with exact-response SHA256; no private material or trust-chain assertion |
-| Device Note | CRUD | Resource with composite UUID import; live validation needs a selected disposable device |
-| Library Item placement | Assign/remove and membership listing | Blocked by contradictory remove URL and missing node-level read model |
-| Blueprint routing | Read and update enrollment settings | Settings resource and sensitive lookup; matching adoption/import is read-only, destroy relinquishes management; live validation pending. Routing rule editing is not documented |
-| Device/ADE device metadata | Read and PATCH selected fields | Settings resources and exact-UUID lookups. Unconfigured fields stay unmanaged; destroy releases management without deleting devices. ADE override management requires getter support; undocumented ADE null-clearing remains a contract gap. Live validation pending |
-| Self Service category | List only | ID/name lookup through configuration inventory; no documented create/update/delete |
-| Directory user | Read/delete only | Exact-UUID identity/status lookup. Creation/update belongs to the directory integration; no destructive user lifecycle resource is invented |
-| Device inventory, activity, status, licensing, audit, vulnerability data | Read-oriented API | Reporting scope; does not provide configuration CRUD |
-| Device commands | One-shot operational actions | Not configuration resources; enrollment/deletion/erase are not CRUD equivalents |
-| Other built-in Library Item types, Assignment Map conditions and parameters | No public CRUD contract in this collection | API limitation; no undocumented UI endpoints are used |
+| `iru_custom_script` | Create/read/update/import/delete | Clearing nonempty remediation is blocked after an API rejection; Self Service needs a category. |
+| `iru_custom_profile` | Unsigned XML configuration and platform flags | Syntax validation is not Apple payload validation; signed/binary profiles are unsupported. |
+| `iru_custom_app` | Existing installer key or local package/ZIP/image source, metadata and scripts | Local uploads are capped at 5 GiB. Larger uploads, Liftoff timing and detached-file cleanup need contracts. |
+| `iru_in_house_app` | Existing IPA key or upload/validation workflow | No signed-IPA live lifecycle validation. |
+| `iru_tag` | Tag CRUD; exact UUID lookup through bounded listing | Device associations are separate. |
+| `iru_device_note` | CRUD on an existing enrolled device | Device UUID plus Note UUID identifies an import; this does not manage the device. |
+| `iru_blueprint` | Map container creation/cloning, metadata and enrollment settings | No graph/placement management; classic creation and remote deletion are refused. |
+| `iru_ade_integration` | Metadata, default Blueprint/routing and write-only token renewal | Local token version is not remote token identity. Deletion is refused. |
+| `iru_device_settings` | Configured Blueprint/user/asset/tag fields on an existing device | Omitted fields stay unmanaged; destroy releases management. |
+| `iru_ade_device_settings` | Configured ADE assignment, routing/override and full tag list | Tags/override require observable getters. Numeric legacy users are read-only; user/asset clearing is not inferred. |
+| `iru_blueprint_routing` | Existing tenant-wide enrollment code/activation | No rule management or remote DELETE. |
+| `iru_blueprint_library_item_assignment` | Deprecated classic-root membership only | All current Assignment Maps are refused until node placement can be read reliably. |
 
-## Completion criteria
+## Read-only data sources
 
-Each manageable object needs create, refresh, update, import, a no-change plan
-after apply/import, drift repair, delete, and disappearance handling. Its tests
-must cover real request encoding, explicit false/clear values, failures that
-retain state, partial creation identity recovery, and writes that are not replayed.
-Live evidence must identify the immutable provider and consumer revisions and
-each completed lifecycle phase; a mock pass is not a live pass.
+Configuration lookups: `iru_custom_script`, `iru_custom_profile`, `iru_custom_app`,
+`iru_in_house_app` and `iru_ade_integration` use exact UUIDs. They omit signed URLs,
+installer bytes and write-only Apple tokens. Sensitive configuration remains in state.
 
-Migration should begin with read-only inventory and configuration generation,
-followed by import into protected state and inspection of the resulting plan.
-Import itself must not activate, reassign, recreate, or delete an existing item.
-Static defaults can plan changes to imported settings: configure all existing
-values that must be retained before applying. Use `prevent_destroy` for production
-objects when appropriate. Application installers and XML/script content can
-remain in state even when their schema fields are marked sensitive.
+Identity/metadata lookups: `iru_blueprint`, `iru_library_item`, `iru_device`,
+`iru_ade_device` and `iru_user`. `iru_inventory` lists eight configuration families;
+`iru_blueprint_templates` and `iru_ade_public_key` support enrollment setup.
+`iru_blueprint_routing` reads enrollment settings. `iru_library_item_statuses`
+returns a paginated sensitive status snapshot, not placement or installation proof.
+
+## Unresolved contracts
+
+- Map node/edge/condition CRUD, stable item-to-node reads, multiple placements and
+  canonical node removal. Aggregate membership is insufficient for import/drift.
+- Routing criteria, priority and fallback rules; built-in/Auto App parameters and
+  complete configuration export; Self Service category CRUD/ordering.
+- Atomic safe Blueprint/ADE deletion. A client-side empty-device check can race
+  an assignment; tainted create-first replacements also need `prevent_destroy`.
+- ADE user/asset clearing and omitted override metadata; safe renewal reconciliation
+  after a lost response; Script remediation clearing.
+- Custom App upload readiness, files above 5 GiB, Liftoff fields and detached upload
+  cleanup. The five-second upload grace is not a readiness guarantee.
+
+No undocumented routes, identity mapping or destructive fallbacks are inferred.
+See [validation status](VALIDATION_STATUS.md) for what has actually been tested.

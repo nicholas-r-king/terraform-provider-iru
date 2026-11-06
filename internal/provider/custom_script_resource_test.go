@@ -281,11 +281,13 @@ func TestNondefaultImportMakesDefaultChangesVisible(t *testing.T) {
 	}
 	omitted := matching
 	omitted.Active, omitted.Restart, omitted.ShowInSelfService, omitted.SelfServiceRecommended = types.BoolNull(), types.BoolNull(), types.BoolNull(), types.BoolNull()
-	omitted.ExecutionFrequency, omitted.RemediationScript, omitted.SelfServiceCategoryID = types.StringNull(), types.StringNull(), types.StringNull()
+	omitted.ExecutionFrequency, omitted.SelfServiceCategoryID = types.StringNull(), types.StringNull()
 	proposed := remote
 	proposed.SelfServiceCategoryID = types.StringNull()
 	result := plan(omitted, proposed)
-	want := stateFor(t, syntheticModel())
+	expectedDefaults := syntheticModel()
+	expectedDefaults.RemediationScript = remote.RemediationScript
+	want := stateFor(t, expectedDefaults)
 	if !result.Equal(want.Raw) {
 		t.Fatal("omitted static defaults should be visible in the plan")
 	}
@@ -479,5 +481,29 @@ func TestMatchingConfigurationHasNoOpProtocolPlan(t *testing.T) {
 	}
 	if !planned.Equal(state.Raw) {
 		t.Fatal("matching configuration changed the protocol plan")
+	}
+}
+
+func TestRemediationClearBlockedAtPlanAndSavedPlanUpdate(t *testing.T) {
+	ctx := context.Background()
+	before := syntheticModel()
+	before.RemediationScript = types.StringValue("private-remediation")
+	after := before
+	after.RemediationScript = types.StringValue("")
+	old, next := stateFor(t, before), stateFor(t, after)
+	calls := 0
+	r := mockedResource(t, 200, modelJSON(t, after), func(*http.Request) { calls++ })
+	planned := resource.ModifyPlanResponse{Plan: tfsdk.Plan{Schema: next.Schema, Raw: next.Raw}}
+	r.ModifyPlan(ctx, resource.ModifyPlanRequest{State: old, Plan: planned.Plan}, &planned)
+	if !planned.Diagnostics.HasError() || calls != 0 {
+		t.Fatal("clear was not blocked during planning")
+	}
+	updated := resource.UpdateResponse{State: old}
+	r.Update(ctx, resource.UpdateRequest{State: old, Plan: tfsdk.Plan{Schema: next.Schema, Raw: next.Raw}}, &updated)
+	if !updated.Diagnostics.HasError() || calls != 0 || !updated.State.Raw.Equal(old.Raw) {
+		t.Fatal("saved-plan clear wrote API or lost prior state")
+	}
+	if strings.Contains(fmt.Sprint(planned.Diagnostics), "private-remediation") {
+		t.Fatal("diagnostic exposed content")
 	}
 }

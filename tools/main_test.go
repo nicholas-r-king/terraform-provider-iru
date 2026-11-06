@@ -4,11 +4,52 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestRunnerCommandDeadlineAndExitStatus(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runner{root: t.TempDir(), env: cleanEnv(os.Environ())}
+	args := []string{"-test.run=^TestRunnerDeadlineHelper$"}
+	_, err = r.runWithTimeout(100*time.Millisecond, true, []string{"IRU_TOOL_TEST_HELPER=wait"}, exe, args...)
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "100ms command deadline") {
+		t.Fatalf("deadline must explain cancellation: %v", err)
+	}
+	_, err = r.runWithTimeout(time.Minute, true, []string{"IRU_TOOL_TEST_HELPER=fail"}, exe, args...)
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 3 || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("ordinary exit must retain its status: %v", err)
+	}
+	output, err := r.runWithTimeout(time.Minute, true, []string{"IRU_TOOL_TEST_HELPER=ok"}, exe, args...)
+	if err != nil || string(output) != "completed" {
+		t.Fatalf("successful command capture changed: %q, %v", output, err)
+	}
+}
+
+func TestRunnerDeadlineHelper(t *testing.T) {
+	switch os.Getenv("IRU_TOOL_TEST_HELPER") {
+	case "wait":
+		time.Sleep(time.Minute)
+		os.Exit(0)
+	case "fail":
+		os.Exit(3)
+	case "ok":
+		fmt.Print("completed")
+		os.Exit(0)
+	}
+}
 
 func TestChildEnvironmentIsolation(t *testing.T) {
 	input := []string{"PATH=/synthetic/tools", "GOMODCACHE=/synthetic/cache", "IRU_API_TOKEN=synthetic-private", "iructl_token=synthetic-private", "TF_CLI_ARGS=-synthetic", "TF_LOG=DEBUG", "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=1", "GOTOOLCHAIN=auto", "CHECKPOINT_DISABLE=0"}

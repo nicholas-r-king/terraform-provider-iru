@@ -34,7 +34,10 @@ func inventoryEndpoint(kind string) (endpoint, nameField string, array bool) {
 	case "in_house_apps":
 		return inHouseAppsPath, "name", false
 	case "ade_integrations":
-		return adePath, "server_name", false
+		// The live API redirects the collection without its trailing slash.
+		// Request the canonical collection directly; credentials must never be
+		// forwarded by enabling general redirect following.
+		return adePath + "/", "server_name", false
 	case "self_service_categories":
 		return "/api/v1/self-service/categories", "name", true
 	}
@@ -54,6 +57,7 @@ func (c *Client) ListInventory(ctx context.Context, kind string) ([]InventoryIte
 	next := endpoint
 	pages, ids := map[string]bool{}, map[string]bool{}
 	items := []InventoryItem{}
+	var total paginationTotal
 	for page := 0; ; page++ {
 		if page >= 100 || pages[next] {
 			return nil, errors.New("configuration inventory exceeded its page bound or repeated a page")
@@ -64,7 +68,7 @@ func (c *Client) ListInventory(ctx context.Context, kind string) ([]InventoryIte
 			return nil, err
 		}
 		var records []map[string]json.RawMessage
-		var nextRaw json.RawMessage
+		var nextRaw, countRaw json.RawMessage
 		if array {
 			if json.Unmarshal(data, &records) != nil || records == nil {
 				return nil, errors.New("invalid configuration inventory array (content withheld)")
@@ -72,13 +76,14 @@ func (c *Client) ListInventory(ctx context.Context, kind string) ([]InventoryIte
 			nextRaw = json.RawMessage("null")
 		} else {
 			var envelope struct {
+				Count   json.RawMessage               `json:"count"`
 				Results *[]map[string]json.RawMessage `json:"results"`
 				Next    json.RawMessage               `json:"next"`
 			}
 			if json.Unmarshal(data, &envelope) != nil || envelope.Results == nil || len(envelope.Next) == 0 {
 				return nil, errors.New("invalid configuration inventory page (content withheld)")
 			}
-			records, nextRaw = *envelope.Results, envelope.Next
+			records, nextRaw, countRaw = *envelope.Results, envelope.Next, envelope.Count
 		}
 		for _, record := range records {
 			var item InventoryItem
@@ -91,6 +96,9 @@ func (c *Client) ListInventory(ctx context.Context, kind string) ([]InventoryIte
 			}
 			ids[item.ID] = true
 			items = append(items, item)
+		}
+		if err := total.observe(countRaw, len(items), string(nextRaw) == "null"); err != nil {
+			return nil, err
 		}
 		if string(nextRaw) == "null" {
 			break

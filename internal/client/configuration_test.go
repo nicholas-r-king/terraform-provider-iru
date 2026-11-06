@@ -78,6 +78,57 @@ func TestBlueprintReadAndInputFailures(t *testing.T) {
 	}
 }
 
+func TestBlueprintClassicCreationRefusedBeforeTransport(t *testing.T) {
+	methods := []string{}
+	c := testClient(t, func(req *http.Request) (*http.Response, error) {
+		methods = append(methods, req.Method)
+		if req.Method == http.MethodPatch {
+			if req.ParseForm() != nil || req.Form.Has("type") {
+				t.Fatal("legacy metadata update attempted a type change")
+			}
+		}
+		return response(http.StatusOK, strings.Replace(blueprintFixture, `"type":"map"`, `"type":"classic"`, 1)), nil
+	})
+	for _, source := range []BlueprintInput{
+		{Name: "Synthetic legacy", Type: "classic"},
+		{Name: "Synthetic legacy", Type: "classic", SourceType: "template", SourceID: "1"},
+		{Name: "Synthetic legacy", Type: "classic", SourceType: "blueprint", SourceID: testCategory},
+	} {
+		if _, err := c.CreateBlueprint(context.Background(), source); err == nil || !strings.Contains(err.Error(), "classic Blueprint creation is unsupported") {
+			t.Fatal("obsolete classic create/clone was not clearly refused")
+		}
+	}
+	if len(methods) != 0 {
+		t.Fatal("classic creation reached transport")
+	}
+	// Retain a legacy read/update path for existing state; this synthetic test
+	// does not assert that the current service still exposes classic objects.
+	value, err := c.UpdateBlueprint(context.Background(), testID, BlueprintInput{Name: "Synthetic legacy", Type: "classic"})
+	if err != nil || value.Type != "classic" || strings.Join(methods, ",") != "PATCH,GET" {
+		t.Fatal("legacy metadata compatibility was lost", err)
+	}
+}
+
+func TestBlueprintCreateMismatchRetainsIdentityWithoutReplay(t *testing.T) {
+	for _, body := range []string{
+		strings.Replace(blueprintFixture, `"type":"map"`, `"type":"classic"`, 1),
+		strings.Replace(blueprintFixture, `"is_active":false`, `"is_active":true`, 1),
+	} {
+		calls := 0
+		c := testClient(t, func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.Method != http.MethodPost {
+				t.Fatal("unexpected create verification request")
+			}
+			return response(http.StatusCreated, body), nil
+		})
+		value, err := c.CreateBlueprint(context.Background(), BlueprintInput{Name: "Synthetic map", Type: "map"})
+		if err == nil || value.ID != testID || calls != 1 {
+			t.Fatal("mismatched creation type/enrollment lost identity, succeeded or replayed")
+		}
+	}
+}
+
 func TestTagCRUDAndPagination(t *testing.T) {
 	ctx := context.Background()
 	methods := []string{}
@@ -136,6 +187,30 @@ func TestTagUnsafeAndIncompleteListings(t *testing.T) {
 	c := testClient(t, func(*http.Request) (*http.Response, error) { return response(200, `{"next":null,"results":[]}`), nil })
 	if _, err := c.GetTag(context.Background(), testID); !IsNotFound(err) {
 		t.Fatal("missing Tag must signal disappearance")
+	}
+}
+
+func TestTagAbsenceRequiresCompletedPagesNotCollection404(t *testing.T) {
+	for _, laterPage := range []bool{false, true} {
+		calls := 0
+		c := testClient(t, func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.Method != http.MethodGet {
+				t.Fatal("Tag absence lookup wrote to API")
+			}
+			if laterPage && calls == 1 {
+				return response(200, `{"results":[{"id":"`+testID+`","name":"Synthetic"}],"next":"?offset=1"}`), nil
+			}
+			return response(404, `{"private":"synthetic-private-response"}`), nil
+		})
+		_, err := c.GetTag(context.Background(), testID)
+		if err == nil || IsTagAbsent(err) || strings.Contains(err.Error(), "synthetic-private") {
+			t.Fatal("failed collection/page was interpreted as absent Tag")
+		}
+	}
+	c := testClient(t, func(*http.Request) (*http.Response, error) { return response(200, `{"results":[],"next":null}`), nil })
+	if _, err := c.GetTag(context.Background(), testID); !IsTagAbsent(err) || !IsNotFound(err) {
+		t.Fatal("completed missing lookup did not prove absence")
 	}
 }
 

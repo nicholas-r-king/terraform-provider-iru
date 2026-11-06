@@ -13,8 +13,9 @@ source and identify its license before adding it.
 Linux and macOS are the primary contributor platforms. Provider builds require
 Go 1.25.0 or later; the pinned documentation generator requires Go 1.25.8 or later.
 Install Go and Terraform through your existing trusted workflow and run these
-commands from the repository root. The contributor tool is written in Go; no PowerShell, Bash, Make or other
-shell-specific runtime is required. Windows contributors can use the same commands.
+commands from the repository root. The contributor tool is written in Go and needs no shell-specific build system.
+The current provider upload implementation targets Linux/macOS; Windows is not
+a supported build target.
 
 ```sh
 go run ./tools verify -check-docs
@@ -49,6 +50,29 @@ Commit generated pages with their templates/examples. Do not edit generated
 output directly. Internal research and validation notes do not belong in public
 provider documentation.
 
+## Local build
+
+Build `terraform-provider-iru` into an ignored directory, then configure a
+Terraform CLI development override for its absolute directory:
+
+```sh
+go build -o .cache/bin/terraform-provider-iru .
+```
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "nicholas-r-king/iru" = "/absolute/path/to/repo/.cache/bin"
+  }
+  direct {}
+}
+```
+
+Point `TF_CLI_CONFIG_FILE` at that local configuration only for development.
+`terraform plan` uses the override; `terraform init` still consults configured
+provider installation methods. Do not change a shared/global CLI configuration
+or mistake this for installing a Registry release.
+
 ## Testing and compatibility
 
 - Fast tests cover configuration, wire fields, redaction, error handling, retry
@@ -57,8 +81,7 @@ provider documentation.
   synthetic hostname/token and a loopback mock.
 - A later, separately authorized isolated tenant test is required before claiming
   production compatibility. Mocks do not verify API normalization, permissions,
-  propagation, remediation clearing, or Self Service transitions. No live-test
-  switch is currently implemented.
+  propagation, remediation clearing, or Self Service transitions. Provider Go tests have no live-test switch.
 - Keep stable Library Item IDs and preserve known plan values. Only the stable
   ID uses `UseStateForUnknown`. Schema version zero is intentional; introduce
   Framework state upgrades only for a real incompatible state change, with
@@ -87,8 +110,10 @@ signature under the current [publishing requirements](https://developer.hashicor
 Linux/macOS amd64 and arm64 are the primary target matrix; Windows is optional.
 Cross-compilation does not establish runtime compatibility. Require passing
 native CI results for the exact commit, including loopback mock lifecycles and
-schema export from the built provider. Terraform versions other than 1.17.0 have
-not been validated. The manifest declares protocol 6.
+schema export from the built provider. Local compatibility runs also cover
+Terraform 1.11.0/1.11.1; use 1.11.1 or later for inputs combining ephemeral and
+sensitive because 1.11.0 has an upstream serialization defect. The manifest
+declares protocol 6.
 
 Never replace a released artifact; make a new version. Keep signing keys,
 Registry publication and live tenant validation separate from secret-free

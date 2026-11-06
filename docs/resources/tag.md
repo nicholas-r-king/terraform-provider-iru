@@ -46,4 +46,3 @@ terraform import iru_tag.example 11111111-2222-4333-8444-555555555555
 
 Import by exact Tag UUID and match its existing name for a no-change plan.
 The implementation follows the [official Tags API](https://api-docs.iru.com/).
-Synthetic lifecycle checks do not establish live API compatibility.

@@ -46,10 +46,11 @@ func (r *DeviceSettingsResource) Metadata(_ context.Context, req resource.Metada
 func (r *DeviceSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attrs := map[string]schema.Attribute{
 		"id":           schema.StringAttribute{Computed: true, MarkdownDescription: "Existing device UUID. This resource does not create a device record.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-		"device_id":    schema.StringAttribute{Required: true, MarkdownDescription: "Existing enrolled or ADE-device record UUID, according to resource type. Changing it releases the old settings and adopts the new record.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+		"device_id":    schema.StringAttribute{Required: true, MarkdownDescription: "Existing enrolled or ADE-device record UUID, according to resource type. A different UUID releases the old settings and adopts the new record; casing alone does not replace it.", PlanModifiers: []planmodifier.String{uuidReplacementModifier()}},
 		"blueprint_id": schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Assigned Blueprint UUID. Omit to observe without managing it."},
-		"user_id":      schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Assigned directory-user UUID. Omit to leave unmanaged. For enrolled devices only, an empty string explicitly clears assignment."},
+		"user_id":      schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Assigned directory-user UUID. Omit to leave unmanaged. ADE may report a legacy decimal user identifier when omitted; it is read-only and cannot be configured or sent back as a UUID. For enrolled devices only, an empty string explicitly clears assignment."},
 		"asset_tag":    schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Asset tag. Omit to leave unmanaged. For enrolled devices only, an empty string explicitly clears it."},
+		"tags":         schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, MarkdownDescription: "Full set of assigned tag names. Omit to observe without writing; an explicit empty set clears all tags. ADE management requires the GET response to report tags; an omitted list is unknown, never assumed empty. Tag definitions are separate from this setting."},
 	}
 	description := "Manages Blueprint, user, asset-tag and tag settings of an existing enrolled device through GET/PATCH. Omitted settings are observed but not written. Import by device UUID. Destroy releases management and retains the device and its settings; enrollment, erasure, deletion and commands are never performed."
 	if r.ade {
@@ -57,8 +58,6 @@ func (r *DeviceSettingsResource) Schema(_ context.Context, _ resource.SchemaRequ
 		attrs["blueprint_id"] = schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "ADE Blueprint UUID. A configured UUID selects that Blueprint and disables routing. An empty string selects Blueprint routing. Omit to leave unmanaged unless use_blueprint_routing is configured."}
 		attrs["use_blueprint_routing"] = schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Select Blueprint routing. true clears blueprint_id; false requires a configured or existing Blueprint UUID. Omit to leave unmanaged unless blueprint_id is configured."}
 		attrs["override_dep_profile_id"] = schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "ADE Library Item override UUID; empty string relinks to the Blueprint/routing default. Requires the API to report this field so refresh can verify it. Omit to leave unmanaged."}
-	} else {
-		attrs["tags"] = schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, MarkdownDescription: "Assigned tag names. Omit to leave unmanaged; an explicit empty set clears all tags."}
 	}
 	resp.Schema = schema.Schema{MarkdownDescription: description, Attributes: attrs}
 }
@@ -103,6 +102,9 @@ func settingsResolved(obj types.Object) bool {
 		if value.IsUnknown() {
 			return false
 		}
+		if set, ok := value.(types.Set); ok && !deviceTagSetKnown(set) {
+			return false
+		}
 	}
 	return true
 }
@@ -137,12 +139,15 @@ func deviceSettingsState(ctx context.Context, prior types.Object, value client.D
 			attrs["blueprint_id"] = types.StringValue("")
 		}
 		attrs["override_dep_profile_id"] = settingUUID(value.OverrideDEPProfileID, settingString(prior, "override_dep_profile_id"))
-	} else {
+	}
+	if !ade || value.TagsKnown {
 		tags, diags := types.SetValueFrom(ctx, types.StringType, value.Tags)
 		if diags.HasError() {
 			return types.ObjectNull(prior.AttributeTypes(ctx)), diags
 		}
 		attrs["tags"] = tags
+	} else {
+		attrs["tags"] = types.SetNull(types.StringType)
 	}
 	return types.ObjectValue(prior.AttributeTypes(ctx), attrs)
 }
@@ -175,21 +180,39 @@ func deviceConfigDiagnostics(ctx context.Context, obj types.Object, ade bool) di
 			diagnostics.AddError("Conflicting ADE assignment settings", "A Blueprint UUID requires use_blueprint_routing=false; routing requires an empty or omitted blueprint_id.")
 		}
 	}
-	if !ade {
-		if value, ok := obj.Attributes()["tags"].(types.Set); ok && !value.IsNull() && !value.IsUnknown() {
-			tags := []string{}
-			diagnostics.Append(value.ElementsAs(ctx, &tags, false)...)
-			if !diagnostics.HasError() {
-				if tags == nil {
-					tags = []string{}
-				}
-				if err := client.ValidateDevicePatch(map[string]any{"tags": tags}, false); err != nil {
-					diagnostics.AddAttributeError(path.Root("tags"), "Invalid device tags", err.Error())
-				}
+	if value, ok := obj.Attributes()["tags"].(types.Set); ok && !value.IsNull() && !value.IsUnknown() {
+		for _, element := range value.Elements() {
+			if tag, ok := element.(types.String); ok && !tag.IsUnknown() && (tag.IsNull() || strings.TrimSpace(tag.ValueString()) == "") {
+				diagnostics.AddAttributeError(path.Root("tags"), "Invalid device tags", "Each tag must be a known nonblank name once resolved; null or blank members are not supported.")
+			}
+		}
+		if !deviceTagSetKnown(value) {
+			return diagnostics // Defer unknown tag members until apply.
+		}
+		tags := []string{}
+		diagnostics.Append(value.ElementsAs(ctx, &tags, false)...)
+		if !diagnostics.HasError() {
+			if tags == nil {
+				tags = []string{}
+			}
+			if err := client.ValidateDevicePatch(map[string]any{"tags": tags}, ade); err != nil {
+				diagnostics.AddAttributeError(path.Root("tags"), "Invalid device tags", err.Error())
 			}
 		}
 	}
 	return diagnostics
+}
+
+func deviceTagSetKnown(value types.Set) bool {
+	if value.IsUnknown() {
+		return false
+	}
+	for _, element := range value.Elements() {
+		if element.IsUnknown() {
+			return false
+		}
+	}
+	return true
 }
 func (r *DeviceSettingsResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	obj := settingsObject(ctx, req.Config, &resp.Diagnostics)
@@ -314,31 +337,32 @@ func deviceSettingsPatch(ctx context.Context, cfg types.Object, current client.D
 			}
 		}
 	}
-	if !ade {
-		tags := cfg.Attributes()["tags"].(types.Set)
-		if !tags.IsNull() {
-			values := []string{}
-			if diags := tags.ElementsAs(ctx, &values, false); diags.HasError() {
-				return nil, errors.New("device tag inputs are unresolved")
-			}
-			if values == nil {
-				values = []string{}
-			}
-			prior := append([]string{}, current.Tags...)
-			sort.Strings(values)
-			sort.Strings(prior)
-			same := len(values) == len(prior)
-			if same {
-				for i := range values {
-					if values[i] != prior[i] {
-						same = false
-						break
-					}
+	tags := cfg.Attributes()["tags"].(types.Set)
+	if !tags.IsNull() {
+		if ade && !current.TagsKnown {
+			return nil, errors.New("Iru does not report ADE tags for this record; tags cannot be safely managed")
+		}
+		values := []string{}
+		if diags := tags.ElementsAs(ctx, &values, false); diags.HasError() {
+			return nil, errors.New("device tag inputs are unresolved")
+		}
+		if values == nil {
+			values = []string{}
+		}
+		prior := append([]string{}, current.Tags...)
+		sort.Strings(values)
+		sort.Strings(prior)
+		same := len(values) == len(prior)
+		if same {
+			for i := range values {
+				if values[i] != prior[i] {
+					same = false
+					break
 				}
 			}
-			if !same {
-				fields["tags"] = values
-			}
+		}
+		if !same {
+			fields["tags"] = values
 		}
 	}
 	if len(fields) > 0 {
@@ -348,14 +372,19 @@ func deviceSettingsPatch(ctx context.Context, cfg types.Object, current client.D
 	}
 	return fields, nil
 }
-func verifyDeviceOverride(prior types.Object, current client.DeviceSettings, ade bool) error {
+func verifyDeviceObservability(prior types.Object, current client.DeviceSettings, ade bool) error {
 	value := settingString(prior, "override_dep_profile_id")
 	if ade && !current.OverrideKnown && !value.IsNull() && !value.IsUnknown() {
 		return errors.New("Iru omitted previously known ADE override metadata; prior state was retained")
 	}
+	if ade && !current.TagsKnown {
+		if tags, ok := prior.Attributes()["tags"].(types.Set); ok && !tags.IsNull() && !tags.IsUnknown() {
+			return errors.New("Iru omitted previously observed ADE tags; prior state was retained")
+		}
+	}
 	return nil
 }
-func (r *DeviceSettingsResource) apply(ctx context.Context, cfg, planned types.Object, diagnostics *diag.Diagnostics) (types.Object, bool) {
+func (r *DeviceSettingsResource) apply(ctx context.Context, cfg, planned types.Object, diagnostics *diag.Diagnostics, capture func(types.Object)) (types.Object, bool) {
 	if r.client == nil || !settingsResolved(cfg) {
 		diagnostics.AddError("Device settings client or inputs unavailable", "Configure the provider and resolve all configured settings before applying.")
 		return types.Object{}, false
@@ -375,6 +404,19 @@ func (r *DeviceSettingsResource) apply(ctx context.Context, cfg, planned types.O
 		diagnostics.AddError("Unable to manage Iru device settings", err.Error())
 		return types.Object{}, false
 	}
+	// Creation adopts an existing record. Save its concrete locator and observed
+	// baseline before any possibly ambiguous PATCH. Update keeps prior state.
+	if capture != nil {
+		observed, diags := deviceSettingsState(ctx, planned, current, r.ade)
+		diagnostics.Append(diags...)
+		if diagnostics.HasError() {
+			return types.Object{}, false
+		}
+		capture(observed)
+		if diagnostics.HasError() {
+			return types.Object{}, false
+		}
+	}
 	if len(fields) > 0 {
 		current, err = r.client.UpdateDeviceSettings(ctx, id, r.ade, fields)
 		if err != nil {
@@ -387,7 +429,7 @@ func (r *DeviceSettingsResource) apply(ctx context.Context, cfg, planned types.O
 		diagnostics.AddError("Iru device settings were not confirmed", "The API did not return the configured settings after update. No write was retried; refresh/reconcile before another apply.")
 		return types.Object{}, false
 	}
-	if err := verifyDeviceOverride(planned, current, r.ade); err != nil {
+	if err := verifyDeviceObservability(planned, current, r.ade); err != nil {
 		diagnostics.AddError("Unable to verify ADE device settings", err.Error())
 		return types.Object{}, false
 	}
@@ -401,7 +443,9 @@ func (r *DeviceSettingsResource) Create(ctx context.Context, req resource.Create
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if value, ok := r.apply(ctx, cfg, planned, &resp.Diagnostics); ok {
+	if value, ok := r.apply(ctx, cfg, planned, &resp.Diagnostics, func(observed types.Object) {
+		resp.Diagnostics.Append(resp.State.Set(ctx, observed)...)
+	}); ok {
 		resp.Diagnostics.Append(resp.State.Set(ctx, value)...)
 	}
 }
@@ -411,7 +455,7 @@ func (r *DeviceSettingsResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if value, ok := r.apply(ctx, cfg, planned, &resp.Diagnostics); ok {
+	if value, ok := r.apply(ctx, cfg, planned, &resp.Diagnostics, nil); ok {
 		resp.Diagnostics.Append(resp.State.Set(ctx, value)...)
 	}
 }
@@ -433,7 +477,7 @@ func (r *DeviceSettingsResource) Read(ctx context.Context, req resource.ReadRequ
 		resp.Diagnostics.AddError("Unable to read Iru device settings", err.Error())
 		return
 	}
-	if err := verifyDeviceOverride(prior, current, r.ade); err != nil {
+	if err := verifyDeviceObservability(prior, current, r.ade); err != nil {
 		resp.Diagnostics.AddError("Unable to verify ADE device settings", err.Error())
 		return
 	}
@@ -464,14 +508,13 @@ func emptyDeviceSettingsObject(ade bool) types.Object {
 	for key := range typesMap {
 		values[key] = types.StringNull()
 	}
+	typesMap["tags"] = types.SetType{ElemType: types.StringType}
+	values["tags"] = types.SetNull(types.StringType)
 	if ade {
 		typesMap["use_blueprint_routing"] = types.BoolType
 		typesMap["override_dep_profile_id"] = types.StringType
 		values["use_blueprint_routing"] = types.BoolNull()
 		values["override_dep_profile_id"] = types.StringNull()
-	} else {
-		typesMap["tags"] = types.SetType{ElemType: types.StringType}
-		values["tags"] = types.SetNull(types.StringType)
 	}
 	return types.ObjectValueMust(typesMap, values)
 }

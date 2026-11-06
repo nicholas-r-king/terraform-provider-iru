@@ -12,6 +12,12 @@ description: |-
 
 Import requires both the device UUID and Note UUID. Note content can contain HTML; match the exact returned content. Content remains in state even though displays redact it. Destroy deletes only the Note, never the device.
 
+Changing only UUID casing updates the stored spelling without replacing or
+PATCHing the Note. Changing its content still updates the same Note. A genuinely
+different device UUID requires Note replacement and deletes the old Note as part
+of that replacement; inspect that plan before applying. Both replacement orders
+are covered locally. No real device move is implied by synthetic coverage.
+
 ## Example Usage
 
 {{ range .ExampleFiles }}
@@ -27,4 +33,3 @@ Import requires both the device UUID and Note UUID. Note content can contain HTM
 {{ end }}
 
 The implementation follows the [official Iru API](https://api-docs.iru.com/).
-Synthetic lifecycle checks do not establish live API compatibility.

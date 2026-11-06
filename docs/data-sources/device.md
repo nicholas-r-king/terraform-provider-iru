@@ -34,5 +34,5 @@ data "iru_device" "example" {
 - `asset_tag` (String) Assigned asset tag, or null when empty.
 - `blueprint_id` (String) Assigned Blueprint UUID. ADE routing is represented by an empty string.
 - `id` (String) Canonical device UUID.
-- `tags` (Set of String) Assigned tag names.
+- `tags` (Set of String) Observed assigned tag names. ADE returns null when the field is unreported; an empty set is an observed empty list. This lookup never assigns or clears tags.
 - `user_id` (String) Assigned directory-user UUID, or null when unassigned.

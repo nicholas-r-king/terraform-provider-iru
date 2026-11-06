@@ -77,6 +77,12 @@ func (r *BlueprintRoutingResource) Create(ctx context.Context, req resource.Crea
 	}
 	value, err := r.client.GetBlueprintRouting(ctx)
 	if err == nil && (*value.EnrollmentCode.Code != data.EnrollmentCode.ValueString() || *value.EnrollmentCode.Active != data.EnrollmentActive.ValueBool()) {
+		// This creates Terraform management of existing singleton settings. Retain
+		// the observed baseline and logical locator before an ambiguous PATCH.
+		resp.Diagnostics.Append(resp.State.Set(ctx, blueprintRoutingState(value))...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 		value, err = r.client.UpdateBlueprintRouting(ctx, data.EnrollmentCode.ValueString(), data.EnrollmentActive.ValueBool())
 	}
 	if err != nil {

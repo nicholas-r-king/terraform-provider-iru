@@ -61,7 +61,7 @@ func (*CustomAppResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 		Attributes: map[string]schema.Attribute{
 			"id":                       schema.StringAttribute{Computed: true, MarkdownDescription: "Library Item UUID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"name":                     schema.StringAttribute{Required: true, MarkdownDescription: "Display name."},
-			"file_key":                 schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Existing uploaded installer key, or the result of a source_file upload. Configure either this or source_file at creation. Omit both to adopt an imported item's key."},
+			"file_key":                 schema.StringAttribute{Optional: true, Computed: true, Sensitive: true, MarkdownDescription: "Existing uploaded installer key, or the result of a source_file upload. Configure either this or source_file at creation. Omit both to adopt an imported item's key. Sensitive in displays because keys may reveal private paths/names; retained in state."},
 			"source_file":              schema.StringAttribute{Optional: true, MarkdownDescription: "Local installer path to stream through the documented Iru/S3 upload workflow. Requires source_sha256 and conflicts with a configured file_key. Changing only the path without changing bytes does not upload again."},
 			"source_sha256":            schema.StringAttribute{Optional: true, MarkdownDescription: "Planned SHA256 of source_file; use filesha256(). Verified before and during upload. Changed bytes upload a new installer in place; metadata updates retain the existing key."},
 			"install_type":             schema.StringAttribute{Required: true, MarkdownDescription: "package, zip, or image. zip requires unzip_location."},
@@ -129,17 +129,51 @@ func (*CustomAppResource) ValidateConfig(ctx context.Context, req resource.Valid
 	}
 	if err := validateInstallerSource(data.FileKey, data.SourceFile, data.SourceSHA256); err != nil {
 		resp.Diagnostics.AddError("Invalid installer source", err.Error())
-		return
 	}
-	if data.unknownInput() {
-		return // Resolved inputs are checked again before every write.
+	if !data.Name.IsNull() && !data.Name.IsUnknown() && strings.TrimSpace(data.Name.ValueString()) == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Invalid Custom App name", "name must not be blank.")
 	}
-	input := data.input()
-	if data.FileKey.IsNull() || data.FileKey.IsUnknown() {
-		input.FileKey = "installer-key-resolved-at-apply"
+	if !data.FileKey.IsNull() && !data.FileKey.IsUnknown() && !client.ValidInstallerKey(data.FileKey.ValueString()) {
+		resp.Diagnostics.AddAttributeError(path.Root("file_key"), "Invalid installer key", "file_key must be nonblank and contain no control characters.")
 	}
-	if err := input.Validate(); err != nil {
-		resp.Diagnostics.AddError("Invalid Custom App configuration", err.Error())
+	if !data.InstallType.IsNull() && !data.InstallType.IsUnknown() {
+		if !client.ValidAppInstallType(data.InstallType.ValueString()) {
+			resp.Diagnostics.AddAttributeError(path.Root("install_type"), "Invalid install type", "Use package, zip, or image.")
+		} else if data.InstallType.ValueString() == "zip" && !data.UnzipLocation.IsUnknown() && strings.TrimSpace(data.UnzipLocation.ValueString()) == "" {
+			resp.Diagnostics.AddAttributeError(path.Root("unzip_location"), "ZIP destination required", "zip installation requires unzip_location.")
+		}
+	}
+	if !data.InstallEnforcement.IsUnknown() {
+		enforcement := data.input().InstallEnforcement // Includes the existing null/default choice.
+		if !client.ValidAppEnforcement(enforcement) {
+			resp.Diagnostics.AddAttributeError(path.Root("install_enforcement"), "Invalid enforcement", "Use install_once, continuously_enforce, or no_enforcement.")
+		}
+		if enforcement == "continuously_enforce" && !data.AuditScript.IsUnknown() && strings.TrimSpace(data.AuditScript.ValueString()) == "" {
+			resp.Diagnostics.AddAttributeError(path.Root("audit_script"), "Audit script required", "continuously_enforce requires audit_script.")
+		}
+		if enforcement != "continuously_enforce" && !data.AuditScript.IsNull() && !data.AuditScript.IsUnknown() && data.AuditScript.ValueString() != "" {
+			resp.Diagnostics.AddAttributeError(path.Root("audit_script"), "Unsupported audit script", "audit_script is supported only with continuously_enforce.")
+		}
+		if enforcement == "no_enforcement" && !data.ShowInSelfService.IsUnknown() && !data.ShowInSelfService.ValueBool() {
+			resp.Diagnostics.AddAttributeError(path.Root("install_enforcement"), "Self Service required", "no_enforcement requires Self Service and a category.")
+		}
+	}
+	if !data.SelfServiceCategoryID.IsNull() && !data.SelfServiceCategoryID.IsUnknown() && !client.ValidID(data.SelfServiceCategoryID.ValueString()) {
+		resp.Diagnostics.AddAttributeError(path.Root("self_service_category_id"), "Invalid category ID", "Use an existing category UUID.")
+	}
+	if !data.ShowInSelfService.IsUnknown() {
+		if data.ShowInSelfService.ValueBool() {
+			if data.SelfServiceCategoryID.IsNull() {
+				resp.Diagnostics.AddAttributeError(path.Root("self_service_category_id"), "Category required", "Self Service requires an existing category UUID.")
+			}
+		} else {
+			if !data.SelfServiceCategoryID.IsNull() && !data.SelfServiceCategoryID.IsUnknown() {
+				resp.Diagnostics.AddAttributeError(path.Root("self_service_category_id"), "Self Service disabled", "Categories are managed only while Self Service is enabled.")
+			}
+			if !data.SelfServiceRecommended.IsUnknown() && data.SelfServiceRecommended.ValueBool() {
+				resp.Diagnostics.AddAttributeError(path.Root("self_service_recommended"), "Self Service disabled", "Recommendations require Self Service.")
+			}
+		}
 	}
 }
 

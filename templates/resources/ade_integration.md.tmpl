@@ -10,9 +10,27 @@ description: |-
 
 {{ .Description | trimspace }}
 
-The Apple token is write-only and is never stored in Terraform plan or state. Requires Terraform 1.11 or later. Change server_token_version to renew a token; changing token bytes alone cannot produce a plan difference. Import does not need a token and sets the local version to 0. Match existing metadata and leave the token version at 0 for the first no-change import plan. Deleting this integration affects enrollment; consider prevent_destroy for production.
+The Apple token is write-only and is never stored in Terraform plan or state. Requires Terraform 1.11 or later. Change server_token_version to renew a token; changing token bytes alone cannot produce a plan difference. Import does not need a token and sets the local version to 0. Match existing metadata and leave the token version at 0 for the first no-change import plan. Deletion is blocked because it can unassign devices. Retain the remote integration when removing Terraform management.
+
+For inputs marked both `ephemeral` and `sensitive`, use Terraform **1.11.1 or later**. Terraform 1.11.0 has a confirmed Core serialization bug for that combination and fails planning before renewal. The original floor still supports write-only inputs; this exception is tested explicitly. See [HashiCorp issue #36603](https://github.com/hashicorp/terraform/issues/36603) and the [1.11.1 fix](https://raw.githubusercontent.com/hashicorp/terraform/v1.11.1/CHANGELOG.md).
 
 Set either a default `blueprint_id`, or `use_blueprint_routing = true` with `blueprint_id` omitted. Both assignment choices are sent together for creation, renewal, and metadata updates. JSON uses an explicit null Blueprint for routing; multipart creation and renewal represent that null as an empty `blueprint_id` form field. Real API acceptance of this multipart encoding remains unverified. See the [ADE routing contract](../guides/ade-routing-contract.md) for supported getter shapes and limitations.
+
+`email` and `phone` are sensitive in normal Terraform displays. They remain stored in plain text in state and machine-readable plan output; protect those artifacts. Outputs derived from either contact must use `sensitive = true`. Sensitivity also propagates to expressions, so these values cannot directly serve as `for_each` keys. Existing state values and schema version are unchanged; a refresh-only apply records sensitivity metadata without renewing the Apple token. This does not remove values from older state backups or historical logs.
+
+Configure `lifecycle { prevent_destroy = true }` as in the example. The provider
+rejects observable forced/lifecycle replacements using private planning metadata,
+including `-replace` without refresh. **Tainted state is a known limit**: Terraform
+plans it as a fresh create without prior state/private data. Without the Core
+lifecycle guard, `create_before_destroy` can create a new object before the later
+DELETE refusal, leaving both for reconciliation. The provider still refuses every
+remote DELETE; the Core guard and provider guard protect different stages.
+
+Do not apply older saved replacement plans as if these new planning checks had
+run. Replan with the current provider and lifecycle protection. On a partial
+replacement failure, inspect both active/deposed state and remote records before
+retrying; the new object must not be assumed absent. This is not permission to
+delete either object or expand device/assignment scope.
 
 ## Example Usage
 
@@ -29,4 +47,3 @@ Set either a default `blueprint_id`, or `use_blueprint_routing = true` with `blu
 {{ end }}
 
 The implementation follows the [official Iru API](https://api-docs.iru.com/).
-Synthetic lifecycle checks do not establish live API compatibility.

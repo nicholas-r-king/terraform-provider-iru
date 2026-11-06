@@ -12,11 +12,33 @@ Manages documented ADE-device assignment settings through GET/PATCH. This is the
 
 Use the ADE-device UUID, which differs from its enrolled MDM record UUID. Setting a Blueprint UUID also disables routing. Setting use_blueprint_routing = true clears blueprint_id; an empty blueprint_id is another explicit routing choice. Disabling routing requires a configured or existing concrete Blueprint. Contradictory choices fail before a write.
 
-An empty override_dep_profile_id sends null to re-link the ADE Library Item to its Blueprint/routing default. The initial GET must report override_dep_profile_id before the provider manages it; a missing field refuses the update rather than assuming no override. ADE user/asset null-clearing is not documented, so empty configured values for those fields are refused. Omitting a field releases its management without clearing it. ADE tag updates are not documented and have no schema input.
+An empty override_dep_profile_id sends null to re-link the ADE Library Item to its Blueprint/routing default. The initial GET must report override_dep_profile_id before the provider manages it; a missing field refuses the update rather than assuming no override. ADE user/asset null-clearing is not documented, so empty configured values for those fields are refused. Omitting a field releases its management without clearing it.
+
+`tags` manages the full set of assigned tag names, using the documented ADE tag
+replacement contract. Omit it to observe without writing; an explicit empty set
+clears all assigned tags. It does not create/delete Tag definitions. The initial
+GET must report a valid tag list before this field can be written. An omitted
+list is unknown, not empty; loss of previously observed tags fails refresh and
+retains prior state. The setting can affect future Blueprint Routing evaluation,
+so review the whole set and existing device associations before applying it.
+
+The API can report a legacy positive numeric `user_id`. When `user_id` is omitted,
+that exact value is observed as a decimal string while other explicitly managed
+fields may be updated. It is never converted into a UUID or included in a PATCH.
+Configuring a user still requires a directory UUID; copying a legacy numeric
+observation into configuration is rejected. No undocumented user clearing is
+enabled. This preserves unconfigured assignments instead of requiring a guessed
+identity mapping before managing unrelated fields.
 
 Import is read-only. Destroy releases management while retaining the ADE device and its assignments. There is no device enrollment, erase, or deletion operation in this resource.
 
 A successful PATCH is followed by GET and configured-value verification. Permission/read errors retain prior state, and ambiguous writes are not replayed. A verified 404 removes the settings mapping from state but cannot re-enroll or recreate a missing device.
+
+A different `device_id` UUID replaces only the settings projection. UUID casing
+alone is an in-place spelling update with no API write. On a real selector change,
+omitted settings are observed from the new record; the prior record's observed
+values are not copied to it. Both Terraform replacement orders retain the old
+and new remote records.
 
 ## Example Usage
 
@@ -34,15 +56,16 @@ resource "iru_ade_device_settings" "example" {
 
 ### Required
 
-- `device_id` (String) Existing enrolled or ADE-device record UUID, according to resource type. Changing it releases the old settings and adopts the new record.
+- `device_id` (String) Existing enrolled or ADE-device record UUID, according to resource type. A different UUID releases the old settings and adopts the new record; casing alone does not replace it.
 
 ### Optional
 
 - `asset_tag` (String) Asset tag. Omit to leave unmanaged. For enrolled devices only, an empty string explicitly clears it.
 - `blueprint_id` (String) ADE Blueprint UUID. A configured UUID selects that Blueprint and disables routing. An empty string selects Blueprint routing. Omit to leave unmanaged unless use_blueprint_routing is configured.
 - `override_dep_profile_id` (String) ADE Library Item override UUID; empty string relinks to the Blueprint/routing default. Requires the API to report this field so refresh can verify it. Omit to leave unmanaged.
+- `tags` (Set of String) Full set of assigned tag names. Omit to observe without writing; an explicit empty set clears all tags. ADE management requires the GET response to report tags; an omitted list is unknown, never assumed empty. Tag definitions are separate from this setting.
 - `use_blueprint_routing` (Boolean) Select Blueprint routing. true clears blueprint_id; false requires a configured or existing Blueprint UUID. Omit to leave unmanaged unless blueprint_id is configured.
-- `user_id` (String) Assigned directory-user UUID. Omit to leave unmanaged. For enrolled devices only, an empty string explicitly clears assignment.
+- `user_id` (String) Assigned directory-user UUID. Omit to leave unmanaged. ADE may report a legacy decimal user identifier when omitted; it is read-only and cannot be configured or sent back as a UUID. For enrolled devices only, an empty string explicitly clears assignment.
 
 ### Read-Only
 
@@ -56,4 +79,4 @@ terraform import iru_ade_device_settings.example 11111111-2222-4333-8444-5555555
 ```
 
 
-Contract: [official Iru API](https://api-docs.iru.com/). Mock tests are not live tenant acceptance.
+Contract: [official Iru API](https://api-docs.iru.com/).

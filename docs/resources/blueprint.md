@@ -8,18 +8,48 @@ description: |-
 
 # iru_blueprint (Resource)
 
-Manages Blueprint metadata and manual enrollment settings. Can create empty classic/Assignment Map Blueprints or clone a documented source. Map nodes, parameters, Library Item assignments, and Blueprint routing rules are not managed. Import by UUID; match the existing type explicitly. Deletion permanently removes the Blueprint.
+Manages Blueprint container metadata and manual enrollment settings. New resources default to Assignment Map type; classic creation is refused because Iru retired Classic Blueprints. Omitting type on an existing resource preserves its observed type. Legacy reads/import/metadata updates remain available, without a promise of current tenant support. Map nodes, conditions, parameters, Library Item placement, and Blueprint routing rules are not managed. Remote deletion is blocked: the Iru endpoint unmanages all assigned devices and no atomic empty-Blueprint deletion contract has been verified. Observable replacement plans are rejected, but Terraform hides prior state for tainted resources. Use lifecycle prevent_destroy=true to reject those replacements before a new create; otherwise create-before-destroy can create a replacement before DELETE is refused. Remove Terraform management with a removed block using destroy=false when intentionally retaining the Blueprint.
 
-New Blueprints default to classic with manual enrollment disabled. The enrollment
-code is sensitive in displays and remains in Terraform state. Configure the
-existing Blueprint type and enrollment settings before applying imported state.
-Changing type or clone source requires replacement. Clone provenance cannot be
-read back from Iru and is retained only from configuration.
+New resources default to `map` with manual enrollment disabled. An omitted `type`
+on an existing/imported resource preserves its observed value; this creation-only
+default does not convert or replace a legacy Blueprint. Explicit `classic`
+creation, including a clone or older saved create plan, is refused before POST.
+[Current Iru documentation](https://docs.iru.com/en/endpoint/blueprints/assignment-maps/creating-a-blueprint)
+records conversion of Classic Blueprints to Assignment Maps on April 1, 2026.
+Legacy reads/import/metadata updates are retained for state compatibility, not as
+a claim of current service support for legacy objects.
+
+The enrollment code is sensitive in displays and remains in Terraform state.
+Match existing enrollment settings before applying imported state; the static
+`enrollment_active=false` default can still propose deactivation. Changing type
+or clone source requires replacement, which the provider refuses. Clone provenance
+cannot be read back from Iru and is retained only from configuration.
+For an existing Blueprint, `type`, `source_type` and `source_id` must be known
+when planning: unresolved immutable inputs can require replacement, so the plan
+fails closed until they are resolved. New-resource inputs can still defer
+normally; this does not weaken the create-time classic restriction or apply-time
+deletion block.
 
 This resource manages the Blueprint container and documented metadata. Assignment
 Map logic, node structure, parameters, and Library Item placement remain outside
-its scope. Deleting a Blueprint can affect its devices and external assignments;
-review the plan and consider `prevent_destroy` for production containers.
+its scope. `type=map` does not create/manage map logic. API appearance writes for
+maps remain unverified, so `color` and `icon` cannot be configured for maps even
+though the UI offers appearance controls. Remote deletion stays blocked;
+`prevent_destroy` is not a substitute for the provider's API safety guard.
+
+Configure `lifecycle { prevent_destroy = true }` as in the example. The provider
+rejects observable forced/lifecycle replacements using private planning metadata,
+including `-replace` without refresh. **Tainted state is a known limit**: Terraform
+plans it as a fresh create without prior state/private data. Without the Core
+lifecycle guard, `create_before_destroy` can create a new object before the later
+DELETE refusal, leaving both for reconciliation. The provider still refuses every
+remote DELETE; the Core guard and provider guard protect different stages.
+
+Do not apply older saved replacement plans as if these new planning checks had
+run. Replan with the current provider and lifecycle protection. On a partial
+replacement failure, inspect both active/deposed state and remote records before
+retrying; the new object must not be assumed absent. This is not permission to
+delete either object or expand device/assignment scope.
 
 ## Example Usage
 
@@ -30,6 +60,10 @@ resource "iru_blueprint" "example" {
   type              = "map"
   description       = "Managed with Terraform"
   enrollment_active = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 ```
 
@@ -50,7 +84,7 @@ resource "iru_blueprint" "example" {
 - `icon` (String) Classic Blueprint icon. When omitted, use the API value. Do not configure for map Blueprints.
 - `source_id` (String) Create-only source Blueprint UUID or positive template ID. Changing it requires replacement.
 - `source_type` (String) Create-only clone source: blueprint or template. Requires source_id. Changing it requires replacement. Import cannot recover clone provenance.
-- `type` (String) classic or map. Changing type requires replacement.
+- `type` (String) Defaults to map for a new resource. When omitted for an existing resource, retain its observed type. classic is legacy read/import/update only; creation is refused. Changing type requires replacement, which is blocked.
 
 ### Read-Only
 
@@ -66,4 +100,3 @@ terraform import iru_blueprint.example 11111111-2222-4333-8444-555555555555
 
 Import by exact Blueprint UUID and match existing settings for a no-change plan.
 The implementation follows the [official Blueprints API](https://api-docs.iru.com/).
-Synthetic lifecycle checks do not establish live API compatibility.

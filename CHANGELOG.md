@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- Add exact-UUID Script/Profile/App/In-house/ADE configuration lookups and Library Item status snapshots.
+- Add guarded ADE tag settings and preserve legacy numeric user observations without enabling numeric assignments.
+- Block Blueprint/ADE destruction and observable replacements; tainted create-first replacements still require `prevent_destroy`.
+- Refuse current Assignment Map placement and new classic Blueprint creation; graph/routing-rule/built-in parameter contracts remain unresolved.
+- Retain state after partial failures and incomplete reads, preserve meaningful script/XML content, and validate known inputs independently of unknown expressions.
+- Reject unsupported Script remediation clearing; no alternate removal contract is inferred.
+- Protect installer hashing/cancellation, redact installer/contact fields and consolidate documentation.
+
 ## 0.1.0-alpha.1
 
 Experimental preview. Real Iru tenant compatibility has not been acceptance-tested.

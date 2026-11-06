@@ -188,7 +188,11 @@ func TestTerraformCLIInstallerUploads(t *testing.T) {
 				if kind == "in-house-app" {
 					settings = " runs_on_iphone = true\n"
 				}
-				write(fmt.Sprintf("resource %q \"example\" {\n name = %q\n%s%s}\n", resourceType, name, settings, artifact))
+				ownerOutput := ""
+				if kind == "custom-app" {
+					ownerOutput = "\noutput \"validation_owner\" {\n value = { suite = \"synthetic\", run = \"owned\" }\n sensitive = true\n}\n"
+				}
+				write(fmt.Sprintf("resource %q \"example\" {\n name = %q\n%s%s}\n", resourceType, name, settings, artifact) + ownerOutput)
 			}
 			config(true)
 			run(0, "validate", "-no-color")
@@ -201,6 +205,78 @@ func TestTerraformCLIInstallerUploads(t *testing.T) {
 			mu.Lock()
 			if uploads != 1 || replacements != 0 {
 				t.Error("metadata update uploaded or replaced installer")
+			}
+			if kind == "custom-app" {
+				app.Name = "Synthetic external name drift"
+			}
+			mu.Unlock()
+			if kind == "custom-app" {
+				run(0, "plan", "-refresh-only", "-no-color", "-out=refresh-contract.plan")
+				var refresh struct {
+					ResourceChanges []json.RawMessage `json:"resource_changes"`
+					PriorState      struct {
+						Values struct {
+							Outputs map[string]struct {
+								Value     map[string]string `json:"value"`
+								Sensitive bool              `json:"sensitive"`
+							} `json:"outputs"`
+							RootModule struct {
+								Resources []struct {
+									Values map[string]any `json:"values"`
+								} `json:"resources"`
+							} `json:"root_module"`
+						} `json:"values"`
+					} `json:"prior_state"`
+					ResourceDrift []json.RawMessage `json:"resource_drift"`
+					OutputChanges map[string]struct {
+						Actions []string `json:"actions"`
+					} `json:"output_changes"`
+					PlannedValues struct {
+						RootModule struct {
+							Resources []json.RawMessage `json:"resources"`
+						} `json:"root_module"`
+					} `json:"planned_values"`
+				}
+				if json.Unmarshal([]byte(run(0, "show", "-json", "refresh-contract.plan")), &refresh) != nil || len(refresh.ResourceChanges) != 0 || len(refresh.ResourceDrift) != 1 || len(refresh.PlannedValues.RootModule.Resources) != 0 || len(refresh.PriorState.Values.RootModule.Resources) != 1 || refresh.PriorState.Values.RootModule.Resources[0].Values["name"] != "Synthetic external name drift" {
+					t.Fatalf("unexpected refresh-only contract: resource changes=%d, drift=%d, resources=%d, refreshed=%d", len(refresh.ResourceChanges), len(refresh.ResourceDrift), len(refresh.PlannedValues.RootModule.Resources), len(refresh.PriorState.Values.RootModule.Resources))
+				}
+				if !refresh.PriorState.Values.Outputs["validation_owner"].Sensitive || refresh.PriorState.Values.Outputs["validation_owner"].Value["suite"] != "synthetic" || strings.Join(refresh.OutputChanges["validation_owner"].Actions, ",") != "no-op" {
+					t.Fatal("refresh-only ownership projection changed")
+				}
+				run(2, "plan", "-no-color", "-detailed-exitcode")
+				run(0, "apply", "-auto-approve", "-no-color")
+				run(0, "plan", "-no-color", "-detailed-exitcode")
+				mu.Lock()
+				if app.Name != name || uploads != 1 || replacements != 0 {
+					t.Error("name-drift repair replaced or reuploaded the installer")
+				}
+				mu.Unlock()
+			}
+			// Moving identical bytes is a local source-path transition, not an
+			// installer replacement. Still exercise Update through Terraform.
+			copyName := filepath.Join(t.TempDir(), "same-bytes-copy"+extension)
+			originalBytes, err := os.ReadFile(filename)
+			if err != nil || os.WriteFile(copyName, originalBytes, 0600) != nil {
+				t.Fatal("same-content source fixture copy failed")
+			}
+			filename = copyName
+			config(true)
+			run(2, "plan", "-no-color", "-detailed-exitcode")
+			run(0, "apply", "-auto-approve", "-no-color")
+			run(0, "plan", "-no-color", "-detailed-exitcode")
+			var copied struct {
+				Values struct {
+					RootModule struct {
+						Resources []struct{ Values map[string]any } `json:"resources"`
+					} `json:"root_module"`
+				} `json:"values"`
+			}
+			if json.Unmarshal([]byte(run(0, "show", "-json")), &copied) != nil || len(copied.Values.RootModule.Resources) != 1 || copied.Values.RootModule.Resources[0].Values["source_file"] != filepath.ToSlash(copyName) {
+				t.Fatal("path-only update did not preserve the new local source path")
+			}
+			mu.Lock()
+			if uploads != 1 || presigns != 1 || replacements != 0 {
+				t.Error("identical bytes at a new source path requested or replaced an installer")
 			}
 			mu.Unlock()
 			if os.WriteFile(filename, []byte("synthetic installer B"), 0600) != nil {

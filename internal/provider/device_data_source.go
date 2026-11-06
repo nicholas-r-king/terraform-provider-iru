@@ -32,12 +32,12 @@ func (r *DeviceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 		"blueprint_id": schema.StringAttribute{Computed: true, MarkdownDescription: "Assigned Blueprint UUID. ADE routing is represented by an empty string."},
 		"user_id":      schema.StringAttribute{Computed: true, MarkdownDescription: "Assigned directory-user UUID, or null when unassigned."},
 		"asset_tag":    schema.StringAttribute{Computed: true, MarkdownDescription: "Assigned asset tag, or null when empty."},
+		"tags":         schema.SetAttribute{Computed: true, ElementType: types.StringType, MarkdownDescription: "Observed assigned tag names. ADE returns null when the field is unreported; an empty set is an observed empty list. This lookup never assigns or clears tags."},
 	}
 	if r.ade {
+		attrs["user_id"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Assigned directory-user UUID, legacy ADE numeric user ID represented as a decimal string, or null when unassigned. A numeric ID is not a directory UUID and must not be substituted into user lookups or settings writes."}
 		attrs["use_blueprint_routing"] = schema.BoolAttribute{Computed: true, MarkdownDescription: "Whether the ADE record uses Blueprint routing."}
 		attrs["override_dep_profile_id"] = schema.StringAttribute{Computed: true, MarkdownDescription: "ADE Library Item override UUID, or null when cleared or not reported by the API. Management requires the API to report this property."}
-	} else {
-		attrs["tags"] = schema.SetAttribute{Computed: true, ElementType: types.StringType, MarkdownDescription: "Assigned tag names."}
 	}
 	resp.Schema = schema.Schema{MarkdownDescription: "Reads only assignment metadata for one exact device UUID. It omits names, serial numbers, user email/name, inventory, secrets and operational history. Makes no mutations.", Attributes: attrs}
 }
@@ -62,7 +62,7 @@ func (r *DeviceDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		resp.Diagnostics.AddError("Invalid device lookup", "Configure the provider and supply an exact known device UUID.")
 		return
 	}
-	current, err := r.client.GetDeviceSettings(ctx, id.ValueString(), r.ade)
+	current, err := r.client.GetDeviceMetadata(ctx, id.ValueString(), r.ade)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read Iru device metadata", err.Error())
 		return

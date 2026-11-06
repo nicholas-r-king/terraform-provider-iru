@@ -13,14 +13,16 @@ Manages one Iru Custom Script, including audit/remediation content and Self Serv
 
 Script and remediation contents remain in Terraform state even though Terraform
 redacts them in displays. Do not embed credentials. New items default to inactive,
-no restart, no Self Service, and execution frequency `once`. An empty remediation
-string requests removal. API permissions, normalization, remediation clearing and
-Self Service transitions still require isolated live acceptance testing.
+no restart, no Self Service, and execution frequency `once`. An absent remediation script is omitted on creation. Clearing existing remediation
+content is currently blocked: live testing returned HTTP 400 for an empty value.
+No alternative null/removal contract is verified. Retain the existing content;
+the provider will not replace or delete a Script to clear this field. Self Service
+transitions still require isolated live acceptance testing.
 
 Creation omits absent remediation content. Updates keep a nonblank name and send
 only changed optional content, flags and Self Service settings. An unchanged
 empty remediation field is not resent by a name-only update; changing existing
-remediation to an empty string still explicitly requests removal.
+remediation to an empty string is rejected during planning and before PATCH.
 
 Destroy permanently deletes the Library Item and can affect assignments managed
 elsewhere. Review the plan and consider Terraform `prevent_destroy` where needed.
@@ -35,7 +37,11 @@ does not send undocumented null values to clear hidden category metadata.
 
 Iru can strip outer script whitespace. Known configured spelling is retained for
 equivalent responses; substantive changes remain drift. Imported scripts should
-match the returned content for the first no-op plan.
+match the returned content for the first no-op plan. If your local file differs
+only by the outer whitespace removed by Iru, use `script = trimspace(file("audit.sh"))`
+when adopting it. Import cannot reconstruct the original file's formatting.
+Import and plan perform no API writes; review any substantive content difference
+before applying it.
 
 ## Example Usage
 
@@ -65,7 +71,7 @@ resource "iru_custom_script" "example" {
 
 - `active` (Boolean) Whether the Library Item is active. Defaults to false.
 - `execution_frequency` (String) once, every_15_min, every_day, or no_enforcement. no_enforcement requires Self Service and a category.
-- `remediation_script` (String, Sensitive) Remediation content; empty string removes it. Stored in Terraform state.
+- `remediation_script` (String, Sensitive) Remediation content. Omitted on creation when absent; clearing existing content is currently unsupported. Stored in Terraform state.
 - `restart` (Boolean) Whether to restart after running. Defaults to false.
 - `self_service_category_id` (String) Existing Self Service category UUID. Set only while show_in_self_service is true.
 - `self_service_recommended` (Boolean) Recommend in Self Service; true requires show_in_self_service.

@@ -13,6 +13,19 @@ import (
 
 const tagsPath = "/api/v1/tags"
 
+// A missing Tag is proven only by a complete listing. An HTTP404 for the
+// collection (or a later page) is a read failure, not evidence of object absence.
+type tagAbsentError struct{}
+
+func (*tagAbsentError) Error() string { return "Iru Tag was absent from a complete listing" }
+func (*tagAbsentError) Unwrap() error {
+	return &APIError{Method: http.MethodGet, StatusCode: http.StatusNotFound}
+}
+func IsTagAbsent(err error) bool {
+	var absent *tagAbsentError
+	return errors.As(err, &absent)
+}
+
 type Tag struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -60,6 +73,7 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 	next := tagsPath
 	pages, ids := map[string]bool{}, map[string]bool{}
 	var found *Tag
+	var total paginationTotal
 	for page := 0; ; page++ {
 		if page >= 100 || pages[next] {
 			return Tag{}, errors.New("Tag pagination exceeded its bound or repeated a page")
@@ -70,6 +84,7 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 			return Tag{}, err
 		}
 		var envelope struct {
+			Count   json.RawMessage `json:"count"`
 			Next    json.RawMessage `json:"next"`
 			Results *[]Tag          `json:"results"`
 		}
@@ -90,6 +105,9 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 				found = &copy
 			}
 		}
+		if err := total.observe(envelope.Count, len(ids), string(envelope.Next) == "null"); err != nil {
+			return Tag{}, err
+		}
 		if string(envelope.Next) == "null" {
 			break
 		}
@@ -103,7 +121,7 @@ func (c *Client) GetTag(ctx context.Context, id string) (Tag, error) {
 		}
 	}
 	if found == nil {
-		return Tag{}, &APIError{Method: http.MethodGet, StatusCode: http.StatusNotFound}
+		return Tag{}, &tagAbsentError{}
 	}
 	return *found, nil
 }

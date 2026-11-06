@@ -154,6 +154,79 @@ func TestIPAUploadWaitsForValidatedMatchingMetadata(t *testing.T) {
 	}
 }
 
+func TestCustomAppUploadGracePrecedesFirstLibraryWrite(t *testing.T) {
+	filename, sum := localInstaller(t, "synthetic installer")
+	ticket := uploadFixture()
+	var steps []string
+	graceCompleted := false
+	c := testClient(t, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host != "synthetic.api.iru.com" {
+			steps = append(steps, "s3")
+			consumeS3(t, req, ticket, sum, 19)
+			return response(204, ""), nil
+		}
+		if req.URL.Path == appsPath+"/upload" {
+			steps = append(steps, "ticket")
+			return response(201, ticketJSON(t, ticket)), nil
+		}
+		if req.Method != "POST" || req.URL.Path != appsPath || !graceCompleted {
+			t.Fatal("Library Item write preceded upload grace or used another route")
+		}
+		steps = append(steps, "create")
+		input := appFixture()
+		input.FileKey = ticket.FileKey
+		return response(201, appJSON(t, input)), nil
+	})
+	c.sleep = func(ctx context.Context, delay time.Duration) error {
+		if delay != 5*time.Second || ctx.Err() != nil || strings.Join(steps, ",") != "ticket,s3" {
+			t.Fatal("upload grace must occur once after verified S3 acceptance")
+		}
+		steps = append(steps, "grace")
+		graceCompleted = true
+		return nil
+	}
+	upload, err := c.UploadInstaller(context.Background(), "custom-app", filename, sum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := appFixture()
+	input.FileKey = upload.FileKey
+	if _, err := c.CreateApp(context.Background(), input); err != nil || strings.Join(steps, ",") != "ticket,s3,grace,create" {
+		t.Fatal("upload grace/write sequence incomplete", err)
+	}
+}
+
+func TestCustomAppUploadGraceCancellationRetainsOnlyPrivateUploadIdentity(t *testing.T) {
+	filename, sum := localInstaller(t, "synthetic installer")
+	ticket := uploadFixture()
+	calls, waits := 0, 0
+	c := testClient(t, func(req *http.Request) (*http.Response, error) {
+		calls++
+		if req.URL.Host == "synthetic.api.iru.com" {
+			if req.URL.Path != appsPath+"/upload" || req.Method != "POST" {
+				t.Fatal("cancelled grace reached a Library Item write")
+			}
+			return response(201, ticketJSON(t, ticket)), nil
+		}
+		consumeS3(t, req, ticket, sum, 19)
+		return response(204, ""), nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.sleep = func(ctx context.Context, delay time.Duration) error {
+		waits++
+		cancel()
+		return ctx.Err()
+	}
+	upload, err := c.UploadInstaller(ctx, "custom-app", filename, sum)
+	if err == nil || calls != 2 || waits != 1 || upload.FileKey != ticket.FileKey || upload.SHA256 != sum {
+		t.Fatal("cancelled grace lost reconciliation identity or continued", err)
+	}
+	if strings.Contains(err.Error(), ticket.FileKey) || strings.Contains(err.Error(), "synthetic-security-token") {
+		t.Fatal("cancelled grace exposed upload metadata")
+	}
+}
+
 func TestInstallerValidationStopsBeforeAnyNetworkWrite(t *testing.T) {
 	filename, sum := localInstaller(t, "synthetic installer")
 	c := testClient(t, func(*http.Request) (*http.Response, error) { t.Fatal("invalid input reached network"); return nil, nil })

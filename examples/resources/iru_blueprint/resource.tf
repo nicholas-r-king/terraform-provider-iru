@@ -3,4 +3,8 @@ resource "iru_blueprint" "example" {
   type              = "map"
   description       = "Managed with Terraform"
   enrollment_active = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }

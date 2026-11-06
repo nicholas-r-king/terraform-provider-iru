@@ -107,7 +107,11 @@ func cleanEnv(env []string) []string {
 }
 
 func (r runner) run(capture bool, extraEnv []string, bin string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	return r.runWithTimeout(10*time.Minute, capture, extraEnv, bin, args...)
+}
+
+func (r runner) runWithTimeout(timeout time.Duration, capture bool, extraEnv []string, bin string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = r.root
@@ -120,6 +124,9 @@ func (r runner) run(capture bool, extraEnv []string, bin string, args ...string)
 		cmd.Stdout = os.Stdout
 	}
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("%s exceeded its %s command deadline: %w", filepath.Base(bin), timeout, ctx.Err())
+		}
 		return nil, fmt.Errorf("%s failed: %w", filepath.Base(bin), err)
 	}
 	return output.Bytes(), nil
@@ -155,7 +162,9 @@ func (r runner) verify(skipVet string, checkDocs bool) error {
 	if _, err := r.build(); err != nil {
 		return err
 	}
-	if _, err := r.run(false, []string{"IRU_TEST_TERRAFORM=" + r.terraform}, r.goExe, "test", "-vet=off", "-count=1", "./..."); err != nil {
+	// Leave time for Go to report a package timeout before the outer process
+	// deadline. Slow native CLI suites must not lose their last test/stack trace.
+	if _, err := r.runWithTimeout(20*time.Minute, false, []string{"IRU_TEST_TERRAFORM=" + r.terraform}, r.goExe, "test", "-json", "-timeout=18m", "-vet=off", "-count=1", "./..."); err != nil {
 		return err
 	}
 	if r.terraform == "" {
@@ -217,11 +226,24 @@ func (r runner) docs(check bool) error {
 		return err
 	}
 	// Pinned official Go tool; no global install or Terraform download.
-	args := []string{"run", docsTool, "generate", "--provider-name", "iru", "--providers-schema", schemaPath, "--website-temp-dir", filepath.Join(r.root, ".cache", "tfplugindocs-temp")}
+	stage, err := os.MkdirTemp(filepath.Join(r.root, ".cache"), "docs-render-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage)
+	stagedDocs := filepath.Join(stage, "docs")
+	outputRelative, err := filepath.Rel(r.root, stagedDocs)
+	if err != nil {
+		return err
+	}
+	args := []string{"run", docsTool, "generate", "--provider-name", "iru", "--providers-schema", schemaPath, "--website-temp-dir", filepath.Join(stage, "temp"), "--rendered-website-dir", outputRelative}
 	if _, err := r.run(false, nil, r.goExe, args...); err != nil {
 		return err
 	}
-	if _, err := r.run(false, nil, r.goExe, "run", docsTool, "validate", "--provider-name", "iru", "--providers-schema", schemaPath); err != nil {
+	if _, err := r.run(false, nil, r.goExe, "run", docsTool, "validate", "--provider-dir", stage, "--provider-name", "iru", "--providers-schema", schemaPath); err != nil {
+		return err
+	}
+	if err := copyGeneratedDocs(stagedDocs, filepath.Join(r.root, "docs")); err != nil {
 		return err
 	}
 	if check {
@@ -271,4 +293,33 @@ func snapshot(dir string) (map[string][32]byte, error) {
 		return nil
 	})
 	return files, err
+}
+
+// The upstream generator clears its output tree. Render to a temporary tree and
+// copy only generated files so untracked notes and conflict copies survive.
+func copyGeneratedDocs(source, destination string) error {
+	return filepath.WalkDir(source, func(name string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(source, name)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destination, relative)
+		if entry.Type()&os.ModeSymlink != 0 {
+			return errors.New("generated documentation must not contain symlinks")
+		}
+		if info, err := os.Lstat(target); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("documentation destination must not be a symlink")
+		}
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0644)
+	})
 }

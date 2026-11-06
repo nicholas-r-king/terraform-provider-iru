@@ -37,7 +37,7 @@ jobs:
   verify:
     name: ${{ matrix.os }} / Go ${{ matrix.go }} / Terraform ${{ matrix.terraform }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

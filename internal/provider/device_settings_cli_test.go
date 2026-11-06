@@ -288,13 +288,20 @@ func TestTerraformCLIADEDeviceSettings(t *testing.T) {
 }
 
 func TestTerraformCLIDeviceMetadataLookups(t *testing.T) {
-	for _, ade := range []bool{false, true} {
-		t.Run(fmt.Sprint(ade), func(t *testing.T) {
+	for _, scenario := range []struct {
+		name            string
+		ade, legacyUser bool
+	}{{"enrolled", false, false}, {"ade", true, false}, {"ade-legacy-user", true, true}} {
+		t.Run(scenario.name, func(t *testing.T) {
+			ade := scenario.ade
 			name, endpoint := "iru_device", "/api/v1/devices/"
 			body := map[string]any{"device_id": syntheticID, "blueprint_id": syntheticCategory, "user": map[string]any{"id": syntheticCategory, "email": "synthetic-private-email"}, "asset_tag": "synthetic", "tags": []string{}, "serial_number": "synthetic-private-serial"}
 			if ade {
 				name, endpoint = "iru_ade_device", "/api/v1/integrations/apple/ade/devices/"
 				body = map[string]any{"id": syntheticID, "blueprint_id": syntheticCategory, "user_id": nil, "asset_tag": nil, "use_blueprint_routing": false, "serial_number": "synthetic-private-serial"}
+				if scenario.legacyUser {
+					body["user_id"] = 42
+				}
 			}
 			run, write := mockTerraform(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				if req.Method != "GET" || req.URL.Path != endpoint+syntheticID {
@@ -308,8 +315,12 @@ func TestTerraformCLIDeviceMetadataLookups(t *testing.T) {
 			write(fmt.Sprintf("data %q \"example\" {\n device_id = %q\n}\n", name, syntheticID))
 			run(0, "apply", "-auto-approve", "-no-color")
 			run(0, "plan", "-no-color", "-detailed-exitcode")
-			if state := run(0, "show", "-json"); strings.Contains(state, "synthetic-private-") {
+			state := run(0, "show", "-json")
+			if strings.Contains(state, "synthetic-private-") {
 				t.Fatal("lookup exposed unrelated device fields")
+			}
+			if scenario.legacyUser && !strings.Contains(state, `"user_id":"42"`) {
+				t.Fatal("ADE lookup did not preserve the legacy numeric user identity as a decimal string")
 			}
 		})
 	}

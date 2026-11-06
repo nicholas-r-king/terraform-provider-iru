@@ -68,3 +68,22 @@ func TestInventoryPaginationMustComplete(t *testing.T) {
 		}
 	}
 }
+
+func TestADEInventoryUsesCanonicalCollectionWithoutRedirect(t *testing.T) {
+	calls := 0
+	c := testClient(t, func(req *http.Request) (*http.Response, error) {
+		calls++
+		if req.Method != http.MethodGet || req.URL.Path != "/api/v1/integrations/apple/ade/" {
+			t.Error("ADE inventory did not request the canonical read-only collection")
+			return response(http.StatusMovedPermanently, ""), nil
+		}
+		if req.URL.RawQuery == "" {
+			return response(200, `{"next":"?offset=1","results":[{"id":"`+testID+`","server_name":"Synthetic ADE","admin_id":"synthetic-private"}]}`), nil
+		}
+		return response(200, `{"next":null,"results":[]}`), nil
+	})
+	items, err := c.ListInventory(context.Background(), "ade_integrations")
+	if err != nil || len(items) != 1 || items[0].ID != testID || items[0].Name != "Synthetic ADE" || calls != 2 {
+		t.Fatalf("canonical ADE inventory pagination failed: %v", err)
+	}
+}

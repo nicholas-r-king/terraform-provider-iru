@@ -24,6 +24,19 @@ type LibraryItem struct {
 	Name string `json:"name"`
 }
 
+type libraryMembershipAbsentError struct{}
+
+func (*libraryMembershipAbsentError) Error() string {
+	return "Library Item UUID was not found in the selected Blueprint"
+}
+
+// IsLibraryMembershipAbsent is true only after a complete validated listing.
+// A collection/page HTTP404, permission failure or malformed page is not absence.
+func IsLibraryMembershipAbsent(err error) bool {
+	var absent *libraryMembershipAbsentError
+	return errors.As(err, &absent)
+}
+
 func (c *Client) GetBlueprint(ctx context.Context, id string) (Blueprint, error) {
 	if !ValidID(id) {
 		return Blueprint{}, errors.New("Blueprint ID must be a UUID")
@@ -77,6 +90,7 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 	next := path
 	pages, ids := map[string]bool{}, map[string]bool{}
 	var found *LibraryItem
+	var total paginationTotal
 	for page := 0; ; page++ {
 		if page >= 100 || pages[next] {
 			return LibraryItem{}, errors.New("Library Item pagination exceeded its safety bound or repeated a page")
@@ -87,6 +101,7 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 			return LibraryItem{}, err
 		}
 		var envelope struct {
+			Count   json.RawMessage `json:"count"`
 			Next    json.RawMessage `json:"next"`
 			Results *[]LibraryItem  `json:"results"`
 		}
@@ -107,6 +122,9 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 				found = &copy
 			}
 		}
+		if err := total.observe(envelope.Count, len(ids), string(envelope.Next) == "null"); err != nil {
+			return LibraryItem{}, err
+		}
 		if string(envelope.Next) == "null" {
 			break
 		}
@@ -120,7 +138,7 @@ func (c *Client) FindLibraryItem(ctx context.Context, blueprintID, itemID string
 		}
 	}
 	if found == nil {
-		return LibraryItem{}, errors.New("Library Item UUID was not found in the selected Blueprint")
+		return LibraryItem{}, &libraryMembershipAbsentError{}
 	}
 	return *found, nil
 }
