@@ -159,6 +159,29 @@ func TestTagReleaseRequiresAllNativeGatesBeforeSigningAndPublishing(t *testing.T
 	}
 }
 
+func TestManualRegistryVerificationCannotPublishOrAccessSigningSecrets(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "registry-verify.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	for _, required := range []string{"workflow_dispatch:", "permissions:\n  contents: read", "persist-credentials: false", "terraform_wrapper: false", "release.py tag", "release.py registry", "os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]"} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("missing read-only Registry verification control: %s", required)
+		}
+	}
+	for _, forbidden := range []string{"contents: write", "secrets.", "environment:", "release create", "release edit", "publish-release.sh", "--method PATCH", "--method POST"} {
+		if strings.Contains(workflow, forbidden) {
+			t.Fatalf("manual verification must not publish or access signing secrets: %s", forbidden)
+		}
+	}
+	for _, use := range regexp.MustCompile(`(?m)^\s+- uses: (.+)$`).FindAllStringSubmatch(workflow, -1) {
+		if !regexp.MustCompile(`^[^@\s]+@[a-f0-9]{40}(?: #.*)?$`).MatchString(use[1]) {
+			t.Fatal("every manual verification action must be pinned to a full commit")
+		}
+	}
+}
+
 // A real trimmed Go executable exercises the metadata reader: linker flags are
 // absent from Go's build metadata when -trimpath is enabled. Never run the fixture.
 func TestTrimmedReleaseBinaryMetadata(t *testing.T) {

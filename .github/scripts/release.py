@@ -39,7 +39,7 @@ def identity(tag, commit):
     return tag[1:]
 
 
-def gh_api(path):
+def gh_api(path, response_type=dict):
     # Only GitHub CLI receives its token. Never inherit signing or tenant secrets.
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "TMPDIR", "SYSTEMROOT", "GH_TOKEN", "GITHUB_TOKEN")}
     env["GH_PROMPT_DISABLED"] = "1"
@@ -49,8 +49,31 @@ def gh_api(path):
         data = json.loads(result.stdout)
     except ValueError:
         raise ReleaseError("GitHub metadata was not valid JSON") from None
-    require(isinstance(data, dict), "GitHub metadata was not an object")
+    require(isinstance(data, response_type), "GitHub metadata had an unexpected type")
     return data
+
+
+def releases_for_tag(tag, api=None):
+    identity(tag, "0" * 40)
+    api = api or (lambda path: gh_api(path, list))
+    matches = []
+    for page in range(1, 6):
+        rows = api("releases?per_page=100&page=" + str(page))
+        require(isinstance(rows, list) and len(rows) <= 100 and all(isinstance(r, dict) for r in rows), "invalid release listing")
+        matches.extend(r for r in rows if r.get("tag_name") == tag)
+        if len(rows) < 100:
+            return matches
+    raise ReleaseError("release listing is incomplete; inspect existing releases before retrying")
+
+
+def draft_for_tag(tag, commit, api=None):
+    identity(tag, commit)
+    matches = releases_for_tag(tag, api)
+    require(len(matches) == 1, "expected exactly one release for this tag; inspect drafts before retrying")
+    draft = matches[0]
+    require(draft.get("draft") is True and draft.get("prerelease") is True, "expected a new experimental draft")
+    require("<!-- iru-release-source=" + commit + " -->" in draft.get("body", ""), "draft provenance does not match")
+    return draft
 
 
 def check_tag(tag, commit, api=gh_api):
@@ -243,7 +266,7 @@ def registry(tag, commit, directory, fingerprint):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("policy", "tag", "notes", "assets", "local-assets", "signing-key", "registry"))
+    parser.add_argument("action", choices=("policy", "tag", "notes", "assets", "local-assets", "signing-key", "registry", "release-absent", "draft"))
     parser.add_argument("--tag", default=os.environ.get("RELEASE_TAG", ""))
     parser.add_argument("--commit", default=os.environ.get("RELEASE_COMMIT", ""))
     parser.add_argument("--dir", default="dist")
@@ -264,6 +287,11 @@ def main():
     elif args.action == "signing-key":
         import sys
         print(signing_key(sys.stdin.read(), args.fingerprint))
+    elif args.action == "release-absent":
+        identity(args.tag, args.commit)
+        require(not releases_for_tag(args.tag), "a release or draft already exists; reconcile it before retrying")
+    elif args.action == "draft":
+        print(json.dumps(draft_for_tag(args.tag, args.commit), sort_keys=True))
     else:
         registry(args.tag, args.commit, args.dir, args.fingerprint)
 

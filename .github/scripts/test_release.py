@@ -63,6 +63,20 @@ class ReleasePolicyTests(unittest.TestCase):
             with self.assertRaises(release.ReleaseError): release.policy(TAG, SHA)
             api.assert_not_called()
 
+    def test_draft_lookup_uses_owner_visible_list_and_pagination(self):
+        draft = {"id": 123, "tag_name": TAG, "draft": True, "prerelease": True, "body": "<!-- iru-release-source=" + SHA + " -->"}
+        calls = []
+        def api(path):
+            calls.append(path)
+            return [{"tag_name": "v0.1.0-alpha.1"}] * 100 if path.endswith("page=1") else [draft]
+        self.assertEqual(release.draft_for_tag(TAG, SHA, api), draft)
+        self.assertEqual(calls, ["releases?per_page=100&page=1", "releases?per_page=100&page=2"])
+        for rows in ([], [draft, draft], [dict(draft, draft=False)], [dict(draft, body="wrong source")], {"message": "wrong shape"}):
+            with self.subTest(rows=rows), self.assertRaises(release.ReleaseError):
+                release.draft_for_tag(TAG, SHA, lambda _: rows)
+        with self.assertRaises(release.ReleaseError):
+            release.releases_for_tag(TAG, lambda _: [{"tag_name": "other"}] * 100)
+
     def test_lightweight_and_annotated_tag_identity(self):
         direct = {"object": {"type": "commit", "sha": SHA}}
         self.assertEqual(release.check_tag(TAG, SHA, lambda _: direct), direct["object"])
@@ -251,6 +265,14 @@ if name=='gh':
         (root/'metadata').write_text(json.dumps(data)); sys.exit(0)
     assert args[0]=='api'
     path=next(x for x in args if x.startswith('repos/'))
+    if '/releases/tags/' in path:
+        # GitHub's documented by-tag endpoint cannot retrieve an unpublished draft.
+        sys.exit(44)
+    if '/releases?per_page=' in path:
+        metadata=root/'metadata'
+        data=json.loads(metadata.read_text()) if metadata.exists() else None
+        if mode=='existing-release': data=dict(id=99,tag_name=settings['tag'],draft=True)
+        print(json.dumps([data] if data else [])); sys.exit(0)
     if '/deployment-branch-policies' in path:
         print(json.dumps(dict(total_count=1,branch_policies=[dict(name='v*',type='tag')]))); sys.exit(0)
     if path.endswith('/environments/registry-release'):
@@ -302,11 +324,13 @@ sys.exit(71)
                 self.assertEqual(len(writes), 2)
                 self.assertFalse(json.loads((root / "metadata").read_text())["draft"])
                 self.assertIn("fingerprint=" + FPR, (root / "output").read_text())
-            elif mode in ("wrong-digest", "existing-release"):
+            elif mode == "wrong-digest":
                 self.assertEqual(len(writes), 1)
                 self.assertNotIn("PATCH", writes[0])
             else:
                 self.assertEqual(writes, [])
+                if mode == "existing-release":
+                    self.assertFalse(any(name == "gpg" and "--import" in args for name, args in calls), "existing drafts must stop before importing the signing key")
 
     def test_sign_verify_upload_validate_then_publish(self): self.exercise("ok")
     def test_changed_bytes_prevent_signing_and_release_creation(self): self.exercise("tampered")

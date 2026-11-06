@@ -92,6 +92,15 @@ A failed signing/upload/publication stage may leave a draft or an already public
 release if a response was lost. Inspect the exact tag, assets and signatures before
 retrying. CI never deletes/clobbers an existing release or reuses a version with
 different bytes. Reconcile partial drafts through a separate owner decision.
+Drafts are located through the authenticated release listing and their numeric ID;
+GitHub's by-tag endpoint returns published releases only. An existing draft blocks
+another creation attempt before signing.
 If only Registry verification failed, inspect ingestion and rerun those failed
 verification jobs; do not rebuild or replace the published assets. Detached
 installer uploads in Iru are unrelated to provider release artifacts.
+
+If the original run never scheduled its Registry checks, run **Verify Registry
+release** with the published tag, its full source commit and the expected public
+signing fingerprint. It performs the same four native installation/schema checks
+using published checksums. It has read-only permissions, no signing secrets and
+no publishing step.

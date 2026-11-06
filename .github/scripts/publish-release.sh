@@ -37,6 +37,8 @@ trap 'printf "Release failed during %s; inspect any existing draft before retryi
 python3 .github/scripts/release.py policy
 stage=tag
 python3 .github/scripts/release.py tag > "$work/tag-before.json"
+stage=existing-release-preflight
+python3 .github/scripts/release.py release-absent
 sums="terraform-provider-iru_${RELEASE_TAG#v}_SHA256SUMS"
 stage=checksums
 python3 .github/scripts/release.py local-assets > "$work/unsigned-assets"
@@ -64,9 +66,11 @@ while IFS= read -r name; do assets+=("dist/$name"); done < "$work/assets"
 # Creation never updates an existing release or clobbers an existing asset.
 # Any failure may leave a draft; reconcile it before another attempt.
 stage=draft-creation
+python3 .github/scripts/release.py release-absent
 gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_COMMIT" --verify-tag --draft --prerelease --latest=false --title "$RELEASE_TAG (experimental)" --notes-file "$work/notes.md"
 stage=uploaded-assets
-gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$work/release.json"
+# The by-tag REST endpoint returns published releases, not drafts.
+python3 .github/scripts/release.py draft > "$work/release.json"
 release_id=$(python3 .github/scripts/release.py assets --metadata "$work/release.json")
 python3 .github/scripts/release.py tag > "$work/tag-final.json"
 cmp "$work/tag-before.json" "$work/tag-final.json"
