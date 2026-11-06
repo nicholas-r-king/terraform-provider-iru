@@ -107,7 +107,11 @@ func cleanEnv(env []string) []string {
 }
 
 func (r runner) run(capture bool, extraEnv []string, bin string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	return r.runWithTimeout(10*time.Minute, capture, extraEnv, bin, args...)
+}
+
+func (r runner) runWithTimeout(timeout time.Duration, capture bool, extraEnv []string, bin string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = r.root
@@ -120,6 +124,9 @@ func (r runner) run(capture bool, extraEnv []string, bin string, args ...string)
 		cmd.Stdout = os.Stdout
 	}
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("%s exceeded its %s command deadline: %w", filepath.Base(bin), timeout, ctx.Err())
+		}
 		return nil, fmt.Errorf("%s failed: %w", filepath.Base(bin), err)
 	}
 	return output.Bytes(), nil
@@ -155,7 +162,9 @@ func (r runner) verify(skipVet string, checkDocs bool) error {
 	if _, err := r.build(); err != nil {
 		return err
 	}
-	if _, err := r.run(false, []string{"IRU_TEST_TERRAFORM=" + r.terraform}, r.goExe, "test", "-vet=off", "-count=1", "./..."); err != nil {
+	// Leave time for Go to report a package timeout before the outer process
+	// deadline. Slow native CLI suites must not lose their last test/stack trace.
+	if _, err := r.runWithTimeout(20*time.Minute, false, []string{"IRU_TEST_TERRAFORM=" + r.terraform}, r.goExe, "test", "-json", "-timeout=18m", "-vet=off", "-count=1", "./..."); err != nil {
 		return err
 	}
 	if r.terraform == "" {
