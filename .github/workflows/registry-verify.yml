@@ -1,0 +1,55 @@
+name: Verify Registry release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published version tag
+        required: true
+        type: string
+      source_commit:
+        description: Full source commit identified by the tag
+        required: true
+        type: string
+      fingerprint:
+        description: Expected full public signing fingerprint
+        required: true
+        default: '81EACF3169CFC3FBBE716CFAAF23BE624D69800A'
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ inputs.tag }}
+  RELEASE_COMMIT: ${{ inputs.source_commit }}
+  GPG_FINGERPRINT: ${{ inputs.fingerprint }}
+
+jobs:
+  verify:
+    name: Registry installation / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      - name: Verify tag and download published checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/release.py tag > /dev/null
+          gh api "repos/nicholas-r-king/terraform-provider-iru/releases/tags/$RELEASE_TAG" > /dev/null
+          mkdir dist
+          gh release download "$RELEASE_TAG" --repo nicholas-r-king/terraform-provider-iru --pattern "terraform-provider-iru_${RELEASE_TAG#v}_SHA256SUMS" --dir dist
+      - name: Verify Registry checksum, signer, clean installation and schema
+        run: python3 .github/scripts/release.py registry
