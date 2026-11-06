@@ -10,10 +10,11 @@ description: |-
 
 {{ .Description | trimspace }}
 
-The [published preview](https://registry.terraform.io/providers/nicholas-r-king/iru/0.1.0-alpha.1)
-predates this development branch. Build the branch with a local CLI development
-override to use its changes. Current capabilities and remaining acceptance gaps
-are described in the repository's API coverage and validation status.
+Pin an explicitly published prerelease version when installing from the
+[Terraform Registry](https://registry.terraform.io/providers/nicholas-r-king/iru).
+Unreleased source changes require a local CLI development override. Current
+capabilities and remaining acceptance gaps are described in the repository's
+API coverage and validation status.
 
 Set `IRU_API_URL` to your HTTPS tenant API origin and `IRU_API_TOKEN` through
 your existing secure environment. Explicit configuration takes precedence over

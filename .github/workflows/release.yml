@@ -1,0 +1,230 @@
+# SPDX-License-Identifier: MPL-2.0
+name: Release provider
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+  CHECKPOINT_DISABLE: '1'
+  RELEASE_TAG: ${{ github.ref_name }}
+  RELEASE_COMMIT: ${{ github.sha }}
+  IRU_RELEASE_ENABLED: ${{ vars.IRU_RELEASE_ENABLED }}
+
+jobs:
+  identity:
+    if: github.repository == 'nicholas-r-king/terraform-provider-iru' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Test release policy and failure handling without signing credentials
+        run: python3 -I -B -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Require a merged, clean, versioned source and protected release environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          go run ./tools/release identity -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          python3 .github/scripts/release.py policy
+
+  verify:
+    needs: identity
+    name: Native checks / ${{ matrix.os }} / Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            go: '1.25.0'
+          - os: ubuntu-24.04
+            go: '1.27.3'
+          - os: ubuntu-24.04-arm
+            go: '1.27.3'
+          - os: macos-15-intel
+            go: '1.27.3'
+          - os: macos-15
+            go: '1.27.3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      - name: Unit, Framework, mock CLI, vet, build, examples and docs
+        if: matrix.go != '1.25.0'
+        run: go run ./tools verify -check-docs
+      - name: Minimum provider Go version
+        if: matrix.go == '1.25.0'
+        run: go run ./tools verify
+      - name: Require a clean generated diff
+        run: git diff --exit-code
+
+  package:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      artifact: ${{ steps.artifact.outputs.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.19.0
+          install-only: true
+      - name: Recheck identity and build reproducible unsigned packages
+        run: |
+          go run ./tools/release identity -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          go run ./tools/release materials -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          export GORELEASER_CURRENT_TAG="$RELEASE_TAG"
+          goreleaser check
+          goreleaser release --clean --skip=sign,publish,announce
+          cp terraform-registry-manifest.json "dist/terraform-provider-iru_${RELEASE_TAG#v}_manifest.json"
+          go run ./tools/release verify -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          mkdir -p .cache/first-build
+          cp dist/*_SHA256SUMS .cache/first-build/
+          goreleaser release --clean --skip=sign,publish,announce
+          cp terraform-registry-manifest.json "dist/terraform-provider-iru_${RELEASE_TAG#v}_manifest.json"
+          go run ./tools/release verify -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          cmp .cache/first-build/*_SHA256SUMS dist/*_SHA256SUMS
+      - name: Bind artifact to this source, run and build attempt
+        id: artifact
+        run: printf 'name=unsigned-release-%s-%s-%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: |
+            dist/*.zip
+            dist/*_manifest.json
+            dist/*_SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  package-smoke:
+    needs: package
+    name: Native packaged provider / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.package.outputs.artifact }}
+          path: dist
+      - name: Verify archives and install the native provider offline
+        run: go run ./tools/release smoke -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+
+  publish:
+    needs: [package, package-smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: registry-release
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      fingerprint: ${{ steps.publish.outputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.package.outputs.artifact }}
+          path: dist
+      - name: Reverify source and unsigned packages before exposing signing secrets
+        run: |
+          go run ./tools/release identity -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+          go run ./tools/release verify -tag "$RELEASE_TAG" -commit "$RELEASE_COMMIT"
+      - name: Sign, verify uploads and publish the new prerelease
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          PASSPHRASE: ${{ secrets.PASSPHRASE }}
+          GPG_FINGERPRINT: ${{ vars.GPG_FINGERPRINT }}
+          IRU_RELEASE_SETUP: ${{ vars.IRU_RELEASE_SETUP }}
+        run: bash .github/scripts/publish-release.sh
+
+  registry-verify:
+    needs: [package, publish]
+    name: Registry installation / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.0'
+          terraform_wrapper: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.package.outputs.artifact }}
+          path: dist
+      - name: Wait for Registry ingestion and verify signed native installation/schema
+        env:
+          GPG_FINGERPRINT: ${{ needs.publish.outputs.fingerprint }}
+        run: python3 .github/scripts/release.py registry
