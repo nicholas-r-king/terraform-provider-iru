@@ -17,3 +17,5 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 coverage.out
+
+__pycache__/

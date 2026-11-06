@@ -36,8 +36,8 @@ func TestReleaseConfigurationCIHasNoSigningOrWriteAccess(t *testing.T) {
 		}
 	}
 	runs := regexp.MustCompile(`(?m)^\s+run:\s*(.+)$`).FindAllStringSubmatch(job, -1)
-	if len(runs) != 1 || strings.TrimSpace(runs[0][1]) != "goreleaser check" {
-		t.Fatal("release configuration CI may execute only goreleaser check")
+	if len(runs) != 2 || strings.TrimSpace(runs[0][1]) != "python3 -I -B -m unittest discover -s .github/scripts -p 'test_*.py'" || strings.TrimSpace(runs[1][1]) != "goreleaser check" {
+		t.Fatal("release configuration CI may execute only isolated release tests and goreleaser check")
 	}
 }
 
@@ -94,6 +94,67 @@ func TestReleaseArchiveExplicitlyIncludesRootSourceNotice(t *testing.T) {
 	for _, source := range []string{"release-legal/SOURCE.txt", "release-legal/**/*"} {
 		if !strings.Contains(config, "\n      - src: "+source+"\n") {
 			t.Fatalf("missing root source notice or nested legal tree: %s", source)
+		}
+	}
+}
+
+func TestTagReleaseRequiresAllNativeGatesBeforeSigningAndPublishing(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	for _, required := range []string{"push:\n    tags: ['v*']", "permissions:\n  contents: read", "cancel-in-progress: false", "IRU_RELEASE_ENABLED: ${{ vars.IRU_RELEASE_ENABLED }}", "github.ref_type == 'tag'"} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("missing release trigger/isolation setting: %s", required)
+		}
+	}
+	for _, forbidden := range []string{"workflow_dispatch:", "continue-on-error:", "secrets: inherit", "pull_request_target:"} {
+		if strings.Contains(workflow, forbidden) {
+			t.Fatalf("release gates must not be bypassed: %s", forbidden)
+		}
+	}
+	jobs := map[string]string{}
+	for _, name := range []string{"identity", "verify", "package", "package-smoke", "publish", "registry-verify"} {
+		job := regexp.MustCompile(`(?ms)^  ` + name + `:\n(.*?)(?:^  [A-Za-z0-9_-]+:\n|\z)`).FindStringSubmatch(workflow)
+		if job == nil {
+			t.Fatalf("missing release gate: %s", name)
+		}
+		jobs[name] = job[1]
+		if name != "publish" && (strings.Contains(job[1], "secrets.") || strings.Contains(job[1], "contents: write") || strings.Contains(job[1], "environment:")) {
+			t.Fatalf("only the gated publisher can access signing secrets/write permission: %s", name)
+		}
+	}
+	for name, required := range map[string][]string{
+		"identity":        {"release.py policy", "tools/release identity", "actions: read", "python3 -I -B -m unittest discover"},
+		"verify":          {"needs: identity", "timeout-minutes: 35", "go run ./tools verify -check-docs", "go: '1.25.0'", "macos-15-intel"},
+		"package":         {"needs: verify", "cmp .cache/first-build/*_SHA256SUMS dist/*_SHA256SUMS", "unsigned-release-%s-%s-%s", "GITHUB_RUN_ATTEMPT"},
+		"package-smoke":   {"needs: package", "needs.package.outputs.artifact", "go run ./tools/release smoke", "os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]"},
+		"publish":         {"needs: [package, package-smoke]", "environment: registry-release", "contents: write", "secrets.GPG_PRIVATE_KEY", "secrets.PASSPHRASE", "bash .github/scripts/publish-release.sh", "needs.package.outputs.artifact", "go run ./tools/release verify", "go run ./tools/release identity"},
+		"registry-verify": {"needs: [package, publish]", "needs.publish.outputs.fingerprint", "release.py registry", "terraform_wrapper: false", "os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]"},
+	} {
+		for _, value := range required {
+			if !strings.Contains(jobs[name], value) {
+				t.Fatalf("missing gate in %s: %s", name, value)
+			}
+		}
+	}
+	if strings.Count(jobs["package"], "--skip=sign,publish,announce") != 2 {
+		t.Fatal("both package builds must remain unsigned and unpublished")
+	}
+	for _, name := range []string{"package-smoke", "publish", "registry-verify"} {
+		for _, forbidden := range []string{"run-id:", "repository:", "github-token:"} {
+			if strings.Contains(jobs[name], forbidden) {
+				t.Fatalf("release artifacts must come from this run: %s", name)
+			}
+		}
+	}
+	if strings.Index(jobs["publish"], "go run ./tools/release verify") > strings.Index(jobs["publish"], "secrets.GPG_PRIVATE_KEY") {
+		t.Fatal("package validation must precede signing-secret exposure")
+	}
+	for _, use := range regexp.MustCompile(`(?m)^\s+- uses: (.+)$`).FindAllStringSubmatch(workflow, -1) {
+		if !regexp.MustCompile(`^[^@\s]+@[a-f0-9]{40}(?: #.*)?$`).MatchString(use[1]) {
+			t.Fatal("every release action must be pinned to a full commit")
 		}
 	}
 }

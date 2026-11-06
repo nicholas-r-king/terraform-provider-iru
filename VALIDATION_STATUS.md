@@ -4,7 +4,7 @@
 
 Updated 2026-11-06. This branch has extensive local automated coverage and selected
 live evidence from earlier development builds. It has not completed full live
-acceptance, and the published preview predates these changes.
+acceptance.
 
 ## Automated checks
 
@@ -21,8 +21,8 @@ acceptance, and the published preview predates these changes.
   Ambiguous writes are not automatically replayed. A missing response ID may
   leave a committed remote object outside state and requires reconciliation.
 
-These results precede documentation consolidation. Remote checks for a particular
-commit must be inspected separately; skipped CI is not a passing check.
+Remote checks for a particular commit must be inspected separately; skipped CI
+is not a passing check.
 
 ## Selected live evidence and remaining tests
 

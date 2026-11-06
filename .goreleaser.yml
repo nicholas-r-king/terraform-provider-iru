@@ -52,7 +52,7 @@ checksum:
 # The workflow signs only the checked checksum file after all native gates pass.
 # No signing key is made available to GoReleaser or the build/test jobs.
 release:
-  # GitHub writes are owned exclusively by the gated sign-draft workflow job.
+  # GitHub writes are owned exclusively by the gated publish workflow job.
   disable: 'true'
   github:
     owner: nicholas-r-king

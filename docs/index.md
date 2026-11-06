@@ -10,10 +10,11 @@ description: |-
 
 Development provider for Iru Library Items. Prefer IRU_API_URL and IRU_API_TOKEN environment variables.
 
-The [published preview](https://registry.terraform.io/providers/nicholas-r-king/iru/0.1.0-alpha.1)
-predates this development branch. Build the branch with a local CLI development
-override to use its changes. Current capabilities and remaining acceptance gaps
-are described in the repository's API coverage and validation status.
+Pin an explicitly published prerelease version when installing from the
+[Terraform Registry](https://registry.terraform.io/providers/nicholas-r-king/iru).
+Unreleased source changes require a local CLI development override. Current
+capabilities and remaining acceptance gaps are described in the repository's
+API coverage and validation status.
 
 Set `IRU_API_URL` to your HTTPS tenant API origin and `IRU_API_TOKEN` through
 your existing secure environment. Explicit configuration takes precedence over
@@ -31,13 +32,14 @@ paths, ports, user information, queries, fragments and redirects are refused.
 terraform {
   required_providers {
     iru = {
-      source = "nicholas-r-king/iru"
+      source  = "nicholas-r-king/iru"
+      version = "= 0.2.0-alpha.1"
     }
   }
 }
 
 # Prefer IRU_API_URL and IRU_API_TOKEN from a secure environment.
-# The provider currently requires a local development override.
+# Use a local development override only for unreleased source changes.
 provider "iru" {}
 ```
 

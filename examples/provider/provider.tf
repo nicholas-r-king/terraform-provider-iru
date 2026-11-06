@@ -3,11 +3,12 @@
 terraform {
   required_providers {
     iru = {
-      source = "nicholas-r-king/iru"
+      source  = "nicholas-r-king/iru"
+      version = "= 0.2.0-alpha.1"
     }
   }
 }
 
 # Prefer IRU_API_URL and IRU_API_TOKEN from a secure environment.
-# The provider currently requires a local development override.
+# Use a local development override only for unreleased source changes.
 provider "iru" {}

@@ -3,9 +3,9 @@
 # Terraform provider for Iru
 
 Unofficial Iru endpoint-management provider, using the Terraform Plugin Framework.
-This development branch contains changes beyond the published
-[`0.1.0-alpha.1` preview](https://registry.terraform.io/providers/nicholas-r-king/iru/0.1.0-alpha.1).
-It is not a new Registry release.
+Releases are experimental prereleases. Check the
+[Terraform Registry](https://registry.terraform.io/providers/nicholas-r-king/iru)
+for available versions and pin the selected version explicitly.
 
 The provider manages Custom Scripts, Profiles, Custom Apps, In-house Apps, Tags,
 Device Notes, Blueprint metadata, ADE integrations and selected device/enrollment
@@ -26,7 +26,10 @@ Supply `IRU_API_URL` and `IRU_API_TOKEN` through your secure environment:
 ```hcl
 terraform {
   required_providers {
-    iru = { source = "nicholas-r-king/iru" }
+    iru = {
+      source  = "nicholas-r-king/iru"
+      version = "= 0.2.0-alpha.1"
+    }
   }
 }
 
@@ -40,9 +43,8 @@ resource "iru_custom_script" "example" {
 }
 ```
 
-Use a [development override](CONTRIBUTING.md#local-build) to run this branch.
-The published preview must be selected explicitly and does not include all of
-these changes. Examples are under [examples/](examples/).
+Use a [development override](CONTRIBUTING.md#local-build) for source changes that
+have not been released. Examples are under [examples/](examples/).
 
 Import reads existing objects. Match their configuration and inspect the first
 plan: omitted defaults can change imported settings. Script/XML content, installer

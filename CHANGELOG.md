@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+## 0.2.0-alpha.1
+
 - Add exact-UUID Script/Profile/App/In-house/ADE configuration lookups and Library Item status snapshots.
 - Add guarded ADE tag settings and preserve legacy numeric user observations without enabling numeric assignments.
 - Block Blueprint/ADE destruction and observable replacements; tainted create-first replacements still require `prevent_destroy`.
@@ -11,6 +13,21 @@
 - Retain state after partial failures and incomplete reads, preserve meaningful script/XML content, and validate known inputs independently of unknown expressions.
 - Reject unsupported Script remediation clearing; no alternate removal contract is inferred.
 - Protect installer hashing/cancellation, redact installer/contact fields and consolidate documentation.
+- Publish signed prereleases from explicit version tags after native CI and environment approval; verify Registry installation on all four platforms.
+
+### Upgrading from 0.1.0-alpha.1
+
+Inspect the first plan before applying. Leading script whitespace is meaningful
+drift; match returned content when importing. Installer keys and ADE contact
+fields are now sensitive, so derived outputs must also be sensitive and cannot
+be used directly as instance keys.
+
+New Blueprint containers default to Map; observed imported types are retained.
+Classic creation and Blueprint/ADE integration deletion are refused. Configure
+`prevent_destroy` for retained objects, including protection against tainted
+create-before-destroy paths. Current Map placement and other unresolved API
+contracts remain outside implemented coverage. Full live acceptance is incomplete;
+see [validation status](VALIDATION_STATUS.md).
 
 ## 0.1.0-alpha.1
 
@@ -50,5 +67,3 @@ on amd64/arm64 with Terraform 1.17.0. Windows is not a release target.
   as primary targets and no PowerShell requirement.
 - Secret-free native Linux/macOS amd64/arm64 CI for builds, unit/Framework and
   mock Terraform lifecycles, vet, examples and deterministic schema-based docs.
-
-No Registry version or binary release has been published.

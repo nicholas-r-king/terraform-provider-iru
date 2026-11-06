@@ -199,7 +199,7 @@ func materials(commit, version string) error {
 	if err := collectLegal(runtime.GOROOT(), filepath.Join("release-legal", "go")); err != nil {
 		return err
 	}
-	fmt.Fprintf(&source, "\nGo runtime: %s\nGo runtime source: https://go.dev/dl/%s.src.tar.gz\n\nThe repository must be public and these exact source locations accessible before publication.\nThis experimental build has not been validated against a real Iru tenant.\n", runtime.Version(), runtime.Version())
+	fmt.Fprintf(&source, "\nGo runtime: %s\nGo runtime source: https://go.dev/dl/%s.src.tar.gz\n\nThe repository must be public and these exact source locations accessible before publication.\nFull live acceptance remains incomplete. Selected earlier-build live evidence and limits: https://%s/blob/%s/VALIDATION_STATUS.md\n", runtime.Version(), runtime.Version(), module, commit)
 	return os.WriteFile(filepath.Join("release-legal", "SOURCE.txt"), []byte(source.String()), 0644)
 }
 
