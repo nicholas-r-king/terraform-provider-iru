@@ -39,10 +39,12 @@ class ReleasePolicyTests(unittest.TestCase):
         environment = {"protection_rules": [{"type": "required_reviewers", "prevent_self_review": False, "reviewers": [{"type": "User", "reviewer": {"login": "nicholas-r-king"}}]}], "deployment_branch_policy": {"custom_branch_policies": True}}
         policies = {"branch_policies": [{"name": "v*", "type": "tag"}]}
         release.validate_policy(environment, policies, TAG)
-        for change in ("no-rules", "wrong-reviewer", "no-reviewers", "unrestricted", "branch-only", "wrong-tag"):
+        for change in ("no-rules", "wrong-reviewer", "additional-reviewer", "wrong-reviewer-type", "no-reviewers", "unrestricted", "branch-only", "wrong-tag"):
             env, rules = copy.deepcopy(environment), copy.deepcopy(policies)
             if change == "no-rules": env["protection_rules"] = []
             if change == "wrong-reviewer": env["protection_rules"][0]["reviewers"][0]["reviewer"]["login"] = "someone-else"
+            if change == "additional-reviewer": env["protection_rules"][0]["reviewers"].append({"type": "User", "reviewer": {"login": "someone-else"}})
+            if change == "wrong-reviewer-type": env["protection_rules"][0]["reviewers"][0]["type"] = "Team"
             if change == "no-reviewers": env["protection_rules"][0]["reviewers"] = []
             if change == "unrestricted": env["deployment_branch_policy"] = None
             if change == "branch-only": rules["branch_policies"][0]["type"] = "branch"
